@@ -122,6 +122,14 @@ input:disabled,select:disabled,textarea:disabled{opacity:1;background:transparen
 .tm{display:flex;gap:8px;align-items:center;margin-top:8px;font-size:11.5px;color:var(--mut);flex-wrap:wrap}
 .chip{background:var(--soft);border-radius:6px;padding:1px 6px;font-weight:600;font-size:11px}
 .due.late{color:var(--red);font-weight:600}
+.due.soon{color:#c46a00;font-weight:600}
+.task.warn{border-color:#ffb340;box-shadow:0 0 0 1px #ffb340}
+.banner.due{background:#fff4e5;color:#7a4500;flex-wrap:wrap}
+.banner.due a{color:inherit;font-weight:600}
+@media (prefers-color-scheme:dark){.banner.due{background:#3a2a10;color:#ffcf8a}}
+.duel{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.duel:last-child{border-bottom:0}
+.dtag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;color:#fff;white-space:nowrap}
 .ph{height:44px;border:2px dashed var(--acc);border-radius:12px;opacity:.55;flex:none}
 .menu{position:fixed;z-index:80;background:var(--card);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.18);padding:6px;min-width:220px;max-height:70vh;overflow-y:auto;border:1px solid var(--line)}
 .menu button{display:block;width:100%;text-align:left;border:0;background:transparent;padding:6px 10px;border-radius:7px}
@@ -545,6 +553,24 @@ function avStack(p){const ms=(p.members||[]).slice(0,5);return `<span class="avs
 function statusPill(s){s=s||'aktiv';return `<span class="pill ${esc(s)}">${esc(s[0].toUpperCase()+s.slice(1))}</span>`;}
 const stLabel=k=>(STATUSES.find(s=>s.k===k)||STATUSES[0]).l;
 const isOver=t=>t.due&&t.due<today()&&t.status!=='done';
+function dueIn(t){if(!t||!t.due||t.status==='done')return null;return Math.round((toT(t.due)-toT(today()))/864e5);}
+function dueLabel(d){return d<0?(d===-1?'seit gestern überfällig':'seit '+(-d)+' Tagen überfällig'):d===0?'heute fällig':d===1?'morgen fällig':'';}
+const dueColor=d=>d<0?'#ff3b30':d===0?'#ff9500':'#ffb340';
+function myDueTasks(){const out=[];if(!S.account)return out;Object.values(S.projects).map(ensure).filter(visible).forEach(p=>{const m=p.members.find(x=>x.accountId&&x.accountId===S.account.id);if(!m)return;tasksOf(p).forEach(t=>{const d=dueIn(t);if(t.assignee===m.id&&d!==null&&d<=1)out.push({p,t,d});});});return out.sort((a,b)=>a.d-b.d);}
+function dueKey(){return LK+'_due_'+(S.account?S.account.id:'')+'_'+today();}
+function dueSeen(){try{return localStorage.getItem(dueKey())==='1';}catch(e){return !!S.dueSeenMem;}}
+function markDueSeen(){S.dueSeenMem=true;try{localStorage.setItem(dueKey(),'1');}catch(e){}}
+function dueModal(){
+ const list=myDueTasks();if(!list.length)return;markDueSeen();
+ const canN=typeof Notification!=='undefined'&&Notification.permission==='default';
+ modal(`<div class="mh"><h3>⚠️ Fällige Aufgaben</h3><button class="ghost" data-act="closeModal">✕</button></div><p class="sm mut">Diese Aufgaben sind dir zugewiesen und heute, morgen oder bereits überfällig:</p>${list.map(x=>`<div class="duel" data-act="openTaskFrom" data-pid="${esc(x.p.id)}" data-id="${esc(x.t.id)}"><span class="dtag" style="background:${dueColor(x.d)}">${esc(dueLabel(x.d))}</span><span style="flex:1"><b>${esc(x.t.title)}</b><br><span class="sm mut">${esc(x.p.name)} · fällig ${fmtD(x.t.due)}</span></span><span class="mut">›</span></div>`).join('')}<div class="mf">${canN?'<button data-act="enableNotif" style="margin-right:auto">🔔 Browser-Benachrichtigungen aktivieren</button>':''}<button class="pri" data-act="closeModal">Verstanden</button></div>`);
+}
+function dueNotify(){
+ const list=myDueTasks();if(!list.length||typeof Notification==='undefined'||Notification.permission!=='granted')return;
+ const k=dueKey()+'_n';try{if(localStorage.getItem(k))return;localStorage.setItem(k,'1');}catch(e){}
+ try{new Notification('Projekt-Cockpit: '+list.length+' Aufgabe'+(list.length>1?'n':'')+' fällig',{body:list.slice(0,4).map(x=>'• '+x.t.title+' ('+dueLabel(x.d)+')').join('\n')});}catch(e){}
+}
+function checkDue(){if(!S.account||S.loading)return;dueNotify();if(!dueSeen()&&myDueTasks().length&&!$('#overlay .ov'))setTimeout(()=>{if(!$('#overlay .ov')&&S.account)dueModal();},400);}
 const tasksOf=p=>Object.values(S.tasks).filter(t=>t.pid===p.id);
 const scoreColor=s=>s>=15?'#ff3b30':s>=8?'#ff9500':s>0?'#34c759':'#c7c7cc';
 function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('on');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('on'),2400);}
@@ -562,7 +588,7 @@ function render(){
  const p=S.view==='project'&&P()?ensure(P()):null;
  if(!p&&S.view==='project'){S.view='home';}
  app.innerHTML=topbar()+banners()+(S.view==='users'?usersView():p?projectView(p):homeView())+credit;
- afterRender();
+ afterRender();checkDue();
 }
 function scheduleRender(){const a=document.activeElement;if(a&&a.closest&&a.closest('#app')&&/INPUT|TEXTAREA|SELECT/.test(a.tagName)){S.dirty=true;return;}render();}
 function afterRender(){
@@ -602,6 +628,7 @@ function banners(){
  let b='';
  if(!S.canWrite)b+=`<div class="banner warn">🔒 Nur-Lesen: Du hast für dieses Cockpit keine Schreibrechte. Bitte den Eigentümer, dich beim Teilen als „Mitwirkende:r“ (Contributor) freizugeben.</div>`;
  if(S.netNote)b+=`<div class="banner">${esc(S.netNote)}</div>`;
+ if(S.account){const dl=myDueTasks();if(dl.length)b+=`<div class="banner due">⚠️ <b>${dl.length} Aufgabe${dl.length>1?'n':''}</b> ${dl.length>1?'sind':'ist'} bald fällig: ${dl.slice(0,3).map(x=>`<a href="#" data-act="openTaskFrom" data-pid="${esc(x.p.id)}" data-id="${esc(x.t.id)}">${esc(x.t.title)}</a> <span class="sm">(${esc(dueLabel(x.d))})</span>`).join(' · ')}${dl.length>3?' …':''}<span class="sp"></span><button class="sm" data-act="dueList">Alle anzeigen</button></div>`;}
  const p=S.view==='project'?P():null;
  if(p&&inPreview(p)){const m=p.members.find(x=>x.id===S.preview.mid);b+=`<div class="banner info">👁 Vorschau: So sieht <b>${esc(mName(p,m))}</b> (${esc(roleName(p,m&&m.roleId))}) das Projekt – mit genau diesen Rechten.<span class="sp"></span><button class="sm" data-act="endPreview">Vorschau beenden</button></div>`;}
  return b;
@@ -675,13 +702,14 @@ function overviewView(p){
 function filtered(p){const f=S.filter,q=f.q.toLowerCase();return tasksOf(p).filter(t=>(!q||(t.title+' '+(t.desc||'')).toLowerCase().includes(q))&&(!f.m||(f.m==='_none'?!t.assignee:t.assignee===f.m))&&(!f.p||t.prio===f.p));}
 function tasksView(p){
  const f=S.filter;
- return `<div class="toolbar"><div class="seg">${[['status','Nach Status'],['person','Nach Person'],['list','Liste']].map(([k,l])=>`<button class="${S.board===k?'on':''}" data-act="board" data-id="${k}">${l}</button>`).join('')}</div><input class="srch" placeholder="🔍 Suchen …" data-flt="q" value="${esc(f.q)}"><select data-flt="m"><option value="">Alle Personen</option><option value="_none" ${f.m==='_none'?'selected':''}>Nicht zugewiesen</option>${p.members.map(m=>`<option value="${esc(m.id)}" ${f.m===m.id?'selected':''}>${esc(mName(p,m))}</option>`).join('')}</select><select data-flt="p"><option value="">Alle Prioritäten</option>${PRIOS.map(x=>`<option value="${x.k}" ${f.p===x.k?'selected':''}>${x.l}</option>`).join('')}</select><div class="sp"></div>${can(p,'aufgaben_erstellen')?'<button class="pri" data-act="newTask">+ Aufgabe</button>':''}</div><div id="boardWrap">${boardHtml(p)}</div>`;
+ return `<div class="toolbar"><div class="seg">${[['status','Nach Status'],['person','Nach Person'],['ap','Nach Arbeitspaket'],['list','Liste']].map(([k,l])=>`<button class="${S.board===k?'on':''}" data-act="board" data-id="${k}">${l}</button>`).join('')}</div><input class="srch" placeholder="🔍 Suchen …" data-flt="q" value="${esc(f.q)}"><select data-flt="m"><option value="">Alle Personen</option><option value="_none" ${f.m==='_none'?'selected':''}>Nicht zugewiesen</option>${p.members.map(m=>`<option value="${esc(m.id)}" ${f.m===m.id?'selected':''}>${esc(mName(p,m))}</option>`).join('')}</select><select data-flt="p"><option value="">Alle Prioritäten</option>${PRIOS.map(x=>`<option value="${x.k}" ${f.p===x.k?'selected':''}>${x.l}</option>`).join('')}</select><div class="sp"></div>${can(p,'handbuch_bearbeiten')?'<button data-act="newAp">📦 + Arbeitspaket</button>':''}${can(p,'aufgaben_erstellen')?'<button class="pri" data-act="newTask">+ Aufgabe</button>':''}</div><div id="boardWrap">${boardHtml(p)}</div>`;
 }
 function boardHtml(p){
  if(S.board==='list')return listHtml(p);
  const ts=filtered(p).sort((a,b)=>(a.order||0)-(b.order||0));
  let cols;
  if(S.board==='status')cols=STATUSES.map(s=>({drop:'status:'+s.k,title:s.l,dot:s.c,items:ts.filter(t=>(t.status||'todo')===s.k),add:'status:'+s.k}));
+ else if(S.board==='ap'){const aps=(p.hb.psp||[]).slice().sort(byCode);cols=[{drop:'ap:',title:'Ohne Arbeitspaket',items:ts.filter(t=>!t.apId||!aps.find(r=>r.id===t.apId)),add:'ap:'}].concat(aps.map(r=>({drop:'ap:'+r.id,title:(r.code?r.code+' ':'')+(r.name||'Arbeitspaket'),dot:r.status==='erledigt'?'#34c759':r.status==='in Arbeit'?(p.color||'#0071e3'):'#aeaeb2',items:ts.filter(t=>t.apId===r.id),add:'ap:'+r.id,ap:r})));}
  else cols=[{drop:'person:',title:'Nicht zugewiesen',items:ts.filter(t=>!t.assignee||!p.members.find(m=>m.id===t.assignee)),add:'person:'}].concat(p.members.map(m=>({drop:'person:'+m.id,title:mName(p,m),av:m,items:ts.filter(t=>t.assignee===m.id),add:'person:'+m.id})));
  let h='';
  if(S.board==='status'&&can(p,'aufgaben_zuweisen')&&p.members.length)h+=`<div class="teamdrop"><span class="sm mut">Karte auf eine Person ziehen = zuweisen:</span>${p.members.map(m=>`<div class="tdz" data-drop="assign:${esc(m.id)}">${av(p,m,'sm')}<span class="sm">${esc(firstName(mName(p,m)))}</span><b class="cnt">${tasksOf(p).filter(t=>t.assignee===m.id&&t.status!=='done').length}</b></div>`).join('')}</div>`;
@@ -689,13 +717,14 @@ function boardHtml(p){
 }
 function colHtml(p,c){
  const qa=S.qa===c.add;
- return `<section class="col"><div class="colh">${c.av?av(p,c.av,'sm'):`<i class="dot" style="background:${c.dot||'#8e8e93'}"></i>`}<b>${esc(c.title)}</b><span class="cnt">${c.items.length}</span><div class="sp"></div>${can(p,'aufgaben_erstellen')?`<button class="ghost sm" data-act="qa" data-id="${esc(c.add)}" title="Aufgabe in dieser Spalte anlegen">＋</button>`:''}</div>${qa?`<input class="qa" data-qa="${esc(c.add)}" placeholder="Titel eingeben + Enter">`:''}<div class="col-list" data-drop="${esc(c.drop)}">${c.items.map(t=>cardHtml(p,t)).join('')}</div></section>`;
+ return `<section class="col"><div class="colh">${c.av?av(p,c.av,'sm'):`<i class="dot" style="background:${c.dot||'#8e8e93'}"></i>`}<b>${esc(c.title)}</b><span class="cnt">${c.items.length}</span>${c.ap&&can(p,'handbuch_bearbeiten')?`<button class="ghost sm" data-act="editAp" data-id="${esc(c.ap.id)}" title="Arbeitspaket bearbeiten">✏️</button>`:''}<div class="sp"></div>${can(p,'aufgaben_erstellen')?`<button class="ghost sm" data-act="qa" data-id="${esc(c.add)}" title="Aufgabe in dieser Spalte anlegen">＋</button>`:''}</div>${qa?`<input class="qa" data-qa="${esc(c.add)}" placeholder="Titel eingeben + Enter">`:''}<div class="col-list" data-drop="${esc(c.drop)}">${c.items.map(t=>cardHtml(p,t)).join('')}</div>${S.board==='ap'&&c.drop==='ap:'&&!(p.hb.psp||[]).length?`<p class="sm mut" style="padding:8px">Noch keine Arbeitspakete – lege oben mit „📦 + Arbeitspaket“ eines an und ziehe Aufgaben hinein.</p>`:''}</section>`;
 }
 function cardHtml(p,t){
  const a=p.members.find(m=>m.id===t.assignee),pr=PRIOS.find(x=>x.k===t.prio)||PRIOS[1],ap=(p.hb.psp||[]).find(r=>r.id===t.apId);
  const cl=t.checklist||[],cld=cl.filter(x=>x.d).length;
  const drag=canEditTask(p,t)||can(p,'aufgaben_zuweisen');
- return `<div class="task ${t.status==='done'?'isdone':''}" draggable="${drag}" data-tid="${esc(t.id)}" data-act="openTask" data-id="${esc(t.id)}"><div class="tt"><i class="pr" style="background:${pr.c}" title="Priorität: ${pr.l}"></i><span class="ttl">${esc(t.title)}</span><button class="dots" data-act="taskMenu" data-id="${esc(t.id)}" title="Menü: Status, Zuweisen, Priorität …">⋯</button></div><div class="tm">${ap?`<span class="chip" title="${esc(ap.name)}">${esc(ap.code||'AP')}</span>`:''}${t.due?`<span class="due ${isOver(t)?'late':''}">📅 ${fmtD(t.due)}</span>`:''}${cl.length?`<span>☑︎ ${cld}/${cl.length}</span>`:''}${(t.comments||[]).length?`<span>💬 ${t.comments.length}</span>`:''}${S.board==='person'?`<span>${esc(stLabel(t.status))}</span>`:''}<span class="sp"></span>${a?av(p,a,'sm'):'<span class="avx" title="Nicht zugewiesen">?</span>'}</div></div>`;
+ const dd=dueIn(t);
+ return `<div class="task ${t.status==='done'?'isdone':''} ${dd!==null&&dd<=1?'warn':''}" draggable="${drag}" data-tid="${esc(t.id)}" data-act="openTask" data-id="${esc(t.id)}"><div class="tt"><i class="pr" style="background:${pr.c}" title="Priorität: ${pr.l}"></i><span class="ttl">${esc(t.title)}</span><button class="dots" data-act="taskMenu" data-id="${esc(t.id)}" title="Menü: Status, Zuweisen, Priorität …">⋯</button></div><div class="tm">${ap?`<span class="chip" title="${esc(ap.name)}">${esc(ap.code||'AP')}</span>`:''}${t.due?(()=>{const d=dueIn(t);return `<span class="due ${d!==null&&d<0?'late':d!==null&&d<=1?'soon':''}">📅 ${d===0?'heute':d===1?'morgen':fmtD(t.due)}</span>`})():''}${cl.length?`<span>☑︎ ${cld}/${cl.length}</span>`:''}${(t.comments||[]).length?`<span>💬 ${t.comments.length}</span>`:''}${S.board!=='status'?`<span>${esc(stLabel(t.status))}</span>`:''}<span class="sp"></span>${a?av(p,a,'sm'):'<span class="avx" title="Nicht zugewiesen">?</span>'}</div></div>`;
 }
 function listHtml(p){
  const ts=filtered(p).sort((a,b)=>(a.due||'9999').localeCompare(b.due||'9999'));
@@ -932,12 +961,24 @@ function addTask(p,preset){const t=newTaskObj(p,preset);S.tasks[t.id]=t;Store.se
 function createTaskModal(preset){
  const p=P();const aps=(p.hb.psp||[]).slice().sort(byCode);preset=preset||{};const z=can(p,'aufgaben_zuweisen');
  modal(`<div class="mh"><h3>Neue Aufgabe</h3><button class="ghost" data-act="closeModal">✕</button></div>
- <label class="fld"><span>Titel *</span><input id="ntTitle" data-autofocus data-enter="doCreateTask"></label>
- <label class="fld"><span>Beschreibung</span><textarea id="ntDesc" rows="3"></textarea></label>
+ <label class="fld"><span>Titel *</span><input id="ntTitle" data-autofocus data-enter="doCreateTask" value="${esc(preset.title||'')}"></label>
+ <label class="fld"><span>Beschreibung</span><textarea id="ntDesc" rows="3">${esc(preset.desc||'')}</textarea></label>
  <div class="row" style="gap:12px;flex-wrap:nowrap"><label class="fld"><span>Zuständig</span><select id="ntAs" ${z?'':'disabled'}><option value="">– niemand –</option>${p.members.map(m=>`<option value="${esc(m.id)}" ${preset.assignee===m.id?'selected':''}>${esc(mName(p,m))}</option>`).join('')}</select></label><label class="fld"><span>Status</span><select id="ntSt">${STATUSES.map(s=>`<option value="${s.k}" ${(preset.status||'todo')===s.k?'selected':''}>${s.l}</option>`).join('')}</select></label></div>
- <div class="row" style="gap:12px;flex-wrap:nowrap"><label class="fld"><span>Priorität</span><select id="ntPr">${PRIOS.map(x=>`<option value="${x.k}" ${x.k==='mittel'?'selected':''}>${x.l}</option>`).join('')}</select></label><label class="fld"><span>Fällig am</span><input type="date" id="ntDue"></label></div>
- <label class="fld"><span>Arbeitspaket (PSP)</span><select id="ntAp"><option value="">–</option>${aps.map(r=>`<option value="${esc(r.id)}" ${preset.apId===r.id?'selected':''}>${esc((r.code||'')+' '+(r.name||''))}</option>`).join('')}</select></label>
+ <div class="row" style="gap:12px;flex-wrap:nowrap"><label class="fld"><span>Priorität</span><select id="ntPr">${PRIOS.map(x=>`<option value="${x.k}" ${x.k===(preset.prio||'mittel')?'selected':''}>${x.l}</option>`).join('')}</select></label><label class="fld"><span>Fällig am</span><input type="date" id="ntDue" value="${esc(preset.due||'')}"></label></div>
+ <label class="fld"><span>Arbeitspaket (PSP)</span><select id="ntAp"><option value="">–</option>${aps.map(r=>`<option value="${esc(r.id)}" ${preset.apId===r.id?'selected':''}>${esc((r.code||'')+' '+(r.name||''))}</option>`).join('')}${can(p,'handbuch_bearbeiten')?'<option value="__new">＋ Neues Arbeitspaket …</option>':''}</select></label>
  <div class="mf"><button data-act="closeModal">Abbrechen</button><button class="pri" data-act="doCreateTask">Aufgabe anlegen</button></div>`);
+}
+function apModal(id){
+ const p=P();const r=id?(p.hb.psp||[]).find(x=>x.id===id):null;S.apEdit=id||null;
+ const top=(p.hb.psp||[]).filter(x=>depth(x.code)===0).length;
+ const v=r||{code:String(top+1),status:'offen'};
+ modal(`<div class="mh"><h3>📦 ${r?'Arbeitspaket bearbeiten':'Neues Arbeitspaket'}</h3><button class="ghost" data-act="closeModal">✕</button></div>
+ <div class="row" style="gap:12px;flex-wrap:nowrap"><label class="fld" style="width:120px;flex:none"><span>PSP-Code</span><input id="apCode" value="${esc(v.code||'')}" placeholder="z. B. 2.1"></label><label class="fld"><span>Bezeichnung *</span><input id="apName" value="${esc(v.name||'')}" data-autofocus data-enter="doAp" placeholder="z. B. Location buchen"></label></div>
+ <div class="row" style="gap:12px;flex-wrap:nowrap"><label class="fld"><span>Verantwortlich</span><select id="apWho"><option value="">–</option>${p.members.map(m=>`<option value="${esc(m.id)}" ${v.verantw===m.id?'selected':''}>${esc(mName(p,m))}</option>`).join('')}</select></label><label class="fld"><span>Status</span><select id="apSt">${['offen','in Arbeit','erledigt'].map(s=>`<option ${v.status===s?'selected':''}>${s}</option>`).join('')}</select></label></div>
+ <div class="row" style="gap:12px;flex-wrap:nowrap"><label class="fld"><span>Start</span><input type="date" id="apStart" value="${esc(v.start||'')}"></label><label class="fld"><span>Ende</span><input type="date" id="apEnd" value="${esc(v.ende||'')}"></label><label class="fld" style="width:110px;flex:none"><span>Aufwand h</span><input type="number" id="apH" value="${esc(v.aufwand||'')}"></label></div>
+ <label class="fld"><span>Beschreibung / Ergebnis</span><textarea id="apDesc" rows="3">${esc(v.ergebnis||'')}</textarea></label>
+ <p class="sm mut">Untergeordnete Pakete bekommen einen Code wie 1.1, 1.2 … Arbeitspakete erscheinen auch im Projektstrukturplan und im Terminplan.</p>
+ <div class="mf">${r?'<button class="danger" data-act="delAp" style="margin-right:auto">Löschen</button>':''}<button data-act="closeModal">Abbrechen</button><button class="pri" data-act="doAp">${r?'Speichern':'Anlegen'}</button></div>`);
 }
 function taskModal(id){
  const p=P(),t=S.tasks[id];if(!t||!p)return;S.modalTask=id;
@@ -953,7 +994,7 @@ function taskModal(id){
   <label class="fld"><span>Zuständig</span><select data-tf="assignee" ${asg?'':'disabled'}><option value="">– niemand –</option>${p.members.map(m=>`<option value="${esc(m.id)}" ${t.assignee===m.id?'selected':''}>${esc(mName(p,m))}</option>`).join('')}</select></label>
   <label class="fld"><span>Priorität</span><select data-tf="prio" ${d}>${PRIOS.map(x=>`<option value="${x.k}" ${t.prio===x.k?'selected':''}>${x.l}</option>`).join('')}</select></label>
   <label class="fld"><span>Fällig am</span><input type="date" data-tf="due" value="${esc(t.due||'')}" ${d}></label>
-  <label class="fld"><span>Arbeitspaket (PSP)</span><select data-tf="apId" ${d}><option value="">–</option>${aps.map(r=>`<option value="${esc(r.id)}" ${t.apId===r.id?'selected':''}>${esc((r.code||'')+' '+(r.name||''))}</option>`).join('')}</select></label>
+  <label class="fld"><span>Arbeitspaket (PSP)</span><select data-tf="apId" ${d}><option value="">–</option>${aps.map(r=>`<option value="${esc(r.id)}" ${t.apId===r.id?'selected':''}>${esc((r.code||'')+' '+(r.name||''))}</option>`).join('')}${can(p,'handbuch_bearbeiten')?'<option value="__new">＋ Neues Arbeitspaket …</option>':''}</select></label>
   <p class="sm mut">Erstellt am ${fmtD(t.createdAt)}${(()=>{const c=p.members.find(m=>m.id===t.createdBy);return c?' von '+esc(mName(p,c)):''})()}</p>
   ${!ed?'<p class="sm mut">🔒 Du kannst diese Aufgabe nicht bearbeiten.</p>':''}
   ${dl?'<button class="danger" data-act="delTask" style="margin-top:6px">Aufgabe löschen</button>':''}
@@ -984,7 +1025,9 @@ function helpModal(){
  <li><b>Zuweisen per Drag & Drop:</b> Karte auf eine Person in der Team-Leiste über dem Board ziehen – oder in der Ansicht „Nach Person“ von einer Spalte in die andere.</li>
  <li><b>Zuweisen per Menü:</b> „⋯“ auf jeder Karte → Status, Person, Priorität, Duplizieren, Löschen. In der „Liste“ geht alles über Auswahlfelder.</li>
  <li>Karte anklicken → Details: Beschreibung, Checkliste, Kommentare, Fälligkeit, Verknüpfung zum Arbeitspaket.</li>
- <li>„＋“ in einer Spalte legt die Aufgabe direkt dort an (Titel + Enter).</li></ul>
+ <li>„＋“ in einer Spalte legt die Aufgabe direkt dort an (Titel + Enter).</li>
+ <li><b>📦 Arbeitspakete:</b> Mit „📦 + Arbeitspaket“ (oder in der Aufgabe unter „Arbeitspaket → ＋ Neues Arbeitspaket“) anlegen. In der Ansicht „Nach Arbeitspaket“ ziehst du Aufgaben per Drag & Drop in ein Paket. Arbeitspakete landen automatisch im Projektstrukturplan und im Terminplan.</li>
+ <li><b>⚠️ Fälligkeits-Warnung:</b> Ist eine dir zugewiesene Aufgabe heute oder morgen fällig (oder überfällig), siehst du oben eine Warnleiste, die Karte ist orange markiert und beim ersten Öffnen am Tag erscheint ein Hinweisfenster. Optional gibt es Browser-Benachrichtigungen (🔔).</li></ul>
  <h4>📘 Projekthandbuch</h4><p>Alle Kapitel eines klassischen Projekthandbuchs (angelehnt an pma): Projektauftrag & Ziele, Abgrenzung & Kontext, Stakeholder, Projektorganisation, Projektstrukturplan, Meilensteine, Kosten, Risiken (mit automatischem Score), Kommunikation, Projektmarketing, Spielregeln, Protokolle/To-dos, Statusberichte mit Ampeln, Änderungsmanagement und Projektabschluss inkl. Lessons Learned. Alles wird automatisch gespeichert. ● = Kapitel befüllt. „📋 Als Text kopieren“ exportiert das ganze Handbuch (z. B. für Word).</p>
  <h4>📅 Terminplan</h4><p>Das Gantt-Diagramm entsteht automatisch aus den Arbeitspaketen (Start/Ende) und Meilensteinen. Optional mit Aufgaben-Fälligkeiten.</p>
  <ul><li><b>Person zuteilen:</b> Unter „Team & Rollen“ Benutzer aus der Benutzerverwaltung dem Projekt mit einer Rolle zuteilen – oder Platzhalter ohne Login (z. B. Externe) anlegen.</li>
@@ -1059,8 +1102,22 @@ const ACT={
  taskMenu(el,e){e.stopPropagation();taskMenu(el,el.dataset.id);},
  newTask(){createTaskModal();},
  doCreateTask(){const p=P();const title=$('#ntTitle').value.trim();if(!title){$('#ntTitle').focus();return toast('Bitte einen Titel eingeben');}
-  addTask(p,{title,desc:$('#ntDesc').value.trim(),assignee:$('#ntAs').value,status:$('#ntSt').value,prio:$('#ntPr').value,due:$('#ntDue').value,apId:$('#ntAp').value});closeModal();render();toast('Aufgabe angelegt');},
+  addTask(p,{title,desc:$('#ntDesc').value.trim(),assignee:$('#ntAs').value,status:$('#ntSt').value,prio:$('#ntPr').value,due:$('#ntDue').value,apId:$('#ntAp').value==='__new'?'':$('#ntAp').value});closeModal();render();toast('Aufgabe angelegt');},
  apTask(el){createTaskModal({apId:el.dataset.id});},
+ newAp(){S.apReturn=null;apModal();},
+ editAp(el,e){if(e)e.stopPropagation();S.apReturn=null;apModal(el.dataset.id);},
+ doAp(){const p=P();if(!can(p,'handbuch_bearbeiten'))return deny();const name=$('#apName').value.trim();if(!name){$('#apName').focus();return toast('Bitte eine Bezeichnung eingeben');}
+  const vals={code:$('#apCode').value.trim(),name,verantw:$('#apWho').value,status:$('#apSt').value,start:$('#apStart').value,ende:$('#apEnd').value,aufwand:$('#apH').value===''?'':+$('#apH').value,ergebnis:$('#apDesc').value.trim()};
+  if(vals.start&&vals.ende&&vals.ende<vals.start)return toast('Das Ende liegt vor dem Start');
+  const arr=clone(p.hb.psp||[]);let id=S.apEdit;
+  if(id){const r=arr.find(x=>x.id===id);if(r)Object.assign(r,vals);}else{id='x_'+uid();arr.push({id,...vals});}
+  savePatch(p,{hb:{psp:arr}});const ret=S.apReturn;S.apReturn=null;closeModal();
+  if(ret&&ret.tid&&S.tasks[ret.tid]){updTask(S.tasks[ret.tid],{apId:id});render();taskModal(ret.tid);}
+  else if(ret&&ret.create){render();createTaskModal({...ret.create,apId:id});}
+  else{render();toast(S.apEdit?'Arbeitspaket gespeichert':'Arbeitspaket angelegt');}},
+ delAp(){const p=P();const id=S.apEdit;confirmBox('Arbeitspaket löschen? Zugeordnete Aufgaben bleiben erhalten.',()=>{savePatch(p,{hb:{psp:(p.hb.psp||[]).filter(x=>x.id!==id)}});tasksOf(p).filter(t=>t.apId===id).forEach(t=>updTask(t,{apId:''}));render();toast('Arbeitspaket gelöscht');});},
+ dueList(){dueModal();},
+ async enableNotif(){try{const r=await Notification.requestPermission();if(r==='granted'){toast('Benachrichtigungen aktiviert 🔔');try{localStorage.removeItem(dueKey()+'_n');}catch(e){}dueNotify();}else toast('Benachrichtigungen wurden nicht erlaubt');}catch(e){toast('Dein Browser unterstützt das hier nicht');}closeModal();},
  hbSec(el){S.hbSec=el.dataset.id;render();window.scrollTo(0,0);},
  rowAdd(el){const p=P();if(!can(p,'handbuch_bearbeiten'))return deny();const k=el.dataset.id;const arr=(p.hb[k]||[]).slice();const row={id:'x_'+uid()};
   if(k==='protokolle'||k==='status'||k==='aenderungen')row.datum=today();
@@ -1219,7 +1276,7 @@ document.addEventListener('keydown',e=>{
  if(e.key==='Escape'){if(S.menu)return closeMenu();if($('#overlay .ov'))return closeModal();if(S.qa){S.qa=null;render();}return;}
  if(e.key==='Enter'&&el.dataset){
   if(el.dataset.enter){e.preventDefault();ACT[el.dataset.enter]&&ACT[el.dataset.enter](el,e);}
-  else if(el.dataset.qa!==undefined){e.preventDefault();const v=el.value.trim();if(!v)return;const p=P();const [k,val]=el.dataset.qa.split(':');const pre={title:v};if(k==='status')pre.status=val;else{pre.assignee=val||'';}
+  else if(el.dataset.qa!==undefined){e.preventDefault();const v=el.value.trim();if(!v)return;const p=P();const [k,val]=el.dataset.qa.split(':');const pre={title:v};if(k==='status')pre.status=val;else if(k==='ap')pre.apId=val||'';else{pre.assignee=val||'';}
    const list=tasksOf(p);pre.order=Math.min(Date.now(),...list.map(t=>t.order||0))-1000;addTask(p,pre);render();}
  }
 });
@@ -1243,6 +1300,8 @@ function onInput(e){
  if(ds.rf){if(!can(p,'rollen_verwalten'))return;const [id,k]=ds.rf.split('|');const rs=clone(p.roles);const r=rs.find(x=>x.id===id);if(r){r[k]=el.value;savePatch(p,{roles:rs});}if(e.type==='change')S.dirty=true;return;}
  if(ds.perm&&e.type==='change'){if(!can(p,'rollen_verwalten'))return;const [id,k]=ds.perm.split('|');const rs=clone(p.roles);const r=rs.find(x=>x.id===id);if(r){r.perms=r.perms||{};r.perms[k]=el.checked;savePatch(p,{roles:rs});}return;}
  if(ds.sf){if(!can(p,'projekt_bearbeiten'))return;savePatch(p,{[ds.sf]:el.value});if(e.type==='change')S.dirty=true;return;}
+ if(el.id==='ntAp'&&el.value==='__new'&&e.type==='change'){S.apReturn={create:{title:$('#ntTitle').value,desc:$('#ntDesc').value,assignee:$('#ntAs').value,status:$('#ntSt').value,prio:$('#ntPr').value,due:$('#ntDue').value}};apModal();return;}
+ if(ds.tf==='apId'&&el.value==='__new'){if(e.type==='change'){S.apReturn={tid:S.modalTask};apModal();}return;}
  if(ds.tf){const t=S.tasks[S.modalTask];if(!t)return;const f=ds.tf;
   if(f==='assignee'?!can(p,'aufgaben_zuweisen'):!canEditTask(p,t))return;
   if(f==='status'){if(e.type==='change')setStatus(t,el.value);return;}
@@ -1277,7 +1336,8 @@ function dropTask(tid,target,z,idx){
  const p=P(),t=S.tasks[tid];if(!t||!p)return;
  const i=target.indexOf(':'),kind=target.slice(0,i),val=target.slice(i+1);
  const patch={};let msg='';
- if(kind==='status'){if(val!==t.status){if(!canEditTask(p,t))return deny();patch.status=val;if(val==='done')patch.doneAt=today();msg='Status: '+stLabel(val);}}
+ if(kind==='ap'){if((val||'')!==(t.apId||'')){if(!canEditTask(p,t))return deny();patch.apId=val||'';const r=(p.hb.psp||[]).find(x=>x.id===val);msg=r?'Arbeitspaket: '+(r.code?r.code+' ':'')+r.name:'Arbeitspaket entfernt';}}
+ else if(kind==='status'){if(val!==t.status){if(!canEditTask(p,t))return deny();patch.status=val;if(val==='done')patch.doneAt=today();msg='Status: '+stLabel(val);}}
  else{const nv=val||'';if(nv!==(t.assignee||'')){if(!can(p,'aufgaben_zuweisen'))return deny();patch.assignee=nv;const m=p.members.find(x=>x.id===nv);msg=m?'Zugewiesen an '+mName(p,m):'Zuweisung entfernt';}}
  if(idx>=0){
   if(!Object.keys(patch).length&&!canEditTask(p,t)&&!can(p,'aufgaben_zuweisen'))return deny();
