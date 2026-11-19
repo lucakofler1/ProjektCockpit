@@ -241,3 +241,18 @@ begin
   update public.profiles set name = trim(new_name) where id = auth.uid();
 end $$;
 revoke execute on function public.cockpit_update_my_name(text) from anon;
+
+-- ---------- Update: Benutzer-Sichtbarkeit ----------
+-- Admins sehen alle Benutzer, alle anderen nur sich selbst und Personen aus gemeinsamen Projekten.
+create or replace function public.cockpit_shares_project(other uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.projects p
+    where (p.created_by = auth.uid() or public.cockpit_is_member(p.data))
+      and (p.created_by = other or exists (
+            select 1 from jsonb_array_elements(coalesce(p.data->'members','[]'::jsonb)) m
+            where m->>'accountId' = other::text)))
+$$;
+drop policy if exists "profiles_read" on public.profiles;
+create policy "profiles_read" on public.profiles for select to authenticated
+  using (public.cockpit_is_active() and (public.cockpit_is_admin() or id = auth.uid() or public.cockpit_shares_project(id)));

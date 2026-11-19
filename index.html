@@ -541,6 +541,9 @@ function can(p,perm){
 }
 function canEditTask(p,t){const m=me(p);return can(p,'aufgaben_alle_bearbeiten')||(can(p,'aufgaben_eigene_bearbeiten')&&m&&t.assignee===m.id)||(!inPreview(p)&&isSuper(p)&&S.canWrite);}
 function visible(p){return isSuper(p)||!!me(p);}
+function visibleAccounts(){const all=Object.values(S.accounts);if(isAdmin())return all;const a=S.account;if(!a)return [];
+ const ids=new Set([a.id]);Object.values(S.projects).forEach(p=>{const mine=p.createdBy===a.id||(p.members||[]).some(m=>m.accountId===a.id);if(!mine)return;if(p.createdBy)ids.add(p.createdBy);(p.members||[]).forEach(m=>{if(m.accountId)ids.add(m.accountId);});});
+ return all.filter(x=>ids.has(x.id));}
 
 /* ===== Helfer für Anzeige ===== */
 function mName(p,m){if(!m)return 'Unbekannt';const a=m.accountId&&S.accounts[m.accountId];return (a&&a.name)||m.name||'Unbekannt';}
@@ -822,7 +825,7 @@ function ganttView(p){
 function teamView(p){
  const mm=can(p,'mitglieder_verwalten'),rm=can(p,'rollen_verwalten');const ts=tasksOf(p);
  const used=new Set(p.members.map(m=>m.accountId).filter(Boolean));
- const free=Object.values(S.accounts).filter(a=>!used.has(a.id)&&a.active!==false);
+ const free=visibleAccounts().filter(a=>!used.has(a.id)&&a.active!==false);
  let h=`<div class="card" style="margin-bottom:16px"><div class="blkh"><h3 style="flex:1">👥 Projektteam (${p.members.length})</h3>${isAdmin()?`<button data-act="newUser" data-id="${esc(p.id)}">+ Neuen Benutzer anlegen</button>`:''}${mm?'<button class="pri" data-act="addMember">+ Person zuteilen</button>':''}</div><div class="tblwrap"><table class="mtbl" style="min-width:780px"><thead><tr><th>Person</th><th>Login</th><th style="width:210px">Rolle im Projekt</th><th>Offene Aufgaben</th><th></th></tr></thead><tbody>`;
  h+=p.members.map(m=>{const open=ts.filter(t=>t.assignee===m.id&&t.status!=='done').length;const isMe=me(p)&&me(p).id===m.id;const a=m.accountId&&S.accounts[m.accountId];
   const login=a?`<span class="pill ${a.active===false?'pausiert':'aktiv'}">${a.active===false?'gesperrt':'🔑 '+esc(a.username)}</span>`:(m.accountId==='__owner'?'<span class="pill aktiv">Eigentümer</span>':(mm&&free.length?`<select data-macc="${esc(m.id)}" style="width:190px"><option value="">⚠️ ohne Login – Konto verknüpfen …</option>${free.map(x=>`<option value="${esc(x.id)}">${esc(x.name)} (${esc(x.username)})</option>`).join('')}</select>`:'<span class="pill">ohne Login</span>'));
@@ -906,12 +909,12 @@ function myAccountModal(){
 }
 function addMemberModal(){
  const p=P();const used=new Set(p.members.map(m=>m.accountId).filter(Boolean));
- const free=Object.values(S.accounts).filter(a=>!used.has(a.id)&&a.active!==false).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+ const free=visibleAccounts().filter(a=>!used.has(a.id)&&a.active!==false).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
  modal(`<div class="mh"><h3>Person dem Projekt zuteilen</h3><button class="ghost" data-act="closeModal">✕</button></div>
  <label class="fld"><span>Benutzer</span><select id="amAcc"><option value="">— Platzhalter ohne Login (z. B. Externe) —</option>${free.map(a=>`<option value="${esc(a.id)}">${esc(a.name)} (${esc(a.username)})</option>`).join('')}</select></label>
  <label class="fld" id="amNameF"><span>Name (nur für Platzhalter)</span><input id="amName"></label>
  <label class="fld"><span>Rolle im Projekt</span><select id="amRole">${p.roles.map(r=>`<option value="${esc(r.id)}" ${r.id==='r_tm'?'selected':''}>${esc(r.name)}</option>`).join('')}</select></label>
- ${!free.length?`<p class="sm mut">Alle Benutzer sind bereits im Projekt.${isAdmin()?' Lege in der Benutzerverwaltung neue an.':''}</p>`:''}
+ ${!free.length?`<p class="sm mut">${isAdmin()?'Alle Benutzer sind bereits im Projekt. Lege in der Benutzerverwaltung neue an.':'Keine weiteren Benutzer verfügbar. Du siehst nur Personen aus deinen gemeinsamen Projekten – weitere teilt ein Admin zu.'}</p>`:''}
  <div class="mf">${isAdmin()?`<button data-act="newUser" data-id="${esc(p.id)}" style="margin-right:auto">+ Neuen Benutzer anlegen</button>`:''}<button data-act="closeModal">Abbrechen</button><button class="pri" data-act="doAddMember">Zuteilen</button></div>`);
 }
 
