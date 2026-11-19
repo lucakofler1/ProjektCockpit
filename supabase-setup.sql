@@ -215,3 +215,29 @@ do $$ begin
 end $$;
 
 -- Fertig ✓
+
+-- ---------- Update: Benutzer bearbeiten (Benutzername & eigener Name) ----------
+create or replace function public.cockpit_admin_set_username(target uuid, new_username text, login_domain text) returns void
+language plpgsql security definer set search_path = public, auth as $$
+declare u text := lower(trim(coalesce(new_username,'')));
+begin
+  if not public.cockpit_is_admin() then raise exception 'Nur für Admins'; end if;
+  if u !~ '^[a-z0-9][a-z0-9._-]{1,39}$' then raise exception 'Ungültiger Benutzername'; end if;
+  if exists (select 1 from public.profiles where username = u and id <> target) then
+    raise exception 'Benutzername already exists';
+  end if;
+  update public.profiles set username = u where id = target;
+  update auth.users set email = u || '@' || login_domain, updated_at = now() where id = target;
+  update auth.identities set identity_data = identity_data || jsonb_build_object('email', u || '@' || login_domain), updated_at = now()
+   where user_id = target and provider = 'email';
+end $$;
+revoke execute on function public.cockpit_admin_set_username(uuid, text, text) from anon;
+
+create or replace function public.cockpit_update_my_name(new_name text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not public.cockpit_is_active() then raise exception 'Nicht erlaubt'; end if;
+  if length(trim(coalesce(new_name,''))) = 0 then raise exception 'Name fehlt'; end if;
+  update public.profiles set name = trim(new_name) where id = auth.uid();
+end $$;
+revoke execute on function public.cockpit_update_my_name(text) from anon;

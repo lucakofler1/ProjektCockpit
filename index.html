@@ -812,7 +812,7 @@ function usersView(){
  let h=`<main class="wrap"><div class="hero"><div><h1>👤 Benutzerverwaltung</h1><p class="mut">Lege Personen mit Benutzername & Passwort an und teile sie Projekten mit einer Rolle zu. Jede Person sieht nach dem Login nur ihre Projekte – mit den Rechten ihrer Rolle.</p></div><div class="row"><button data-act="home">← Projekte</button>${ro?'':'<button class="pri" data-act="newUser">+ Benutzer anlegen</button>'}</div></div>`;
  h+=`<div class="card"><div class="tblwrap"><table class="mtbl utbl" style="min-width:980px"><thead><tr><th>Name</th><th>Benutzername</th><th>E-Mail</th><th>Admin</th><th>Darf Projekte anlegen</th><th>Status</th><th>Projekte & Rollen</th><th></th></tr></thead><tbody>`;
  h+=accs.map(a=>{const self=S.account&&S.account.id===a.id;const ups=userProjects(a);const d=ro?'disabled':'';
-  return `<tr><td><div class="row" style="flex-wrap:nowrap"><span class="av sm" style="background:${avColor(a.id)}">${esc(initials(a.name))}</span><input data-af="${esc(a.id)}|name" value="${esc(a.name)}" ${d}>${self?'<span class="pill">Du</span>':''}</div></td><td><code>${esc(a.username)}</code></td><td><input data-af="${esc(a.id)}|email" value="${esc(a.email||'')}" placeholder="optional" ${d}></td><td><input type="checkbox" data-afc="${esc(a.id)}|isAdmin" ${a.isAdmin?'checked':''} ${self||ro?'disabled':''}></td><td><input type="checkbox" data-afc="${esc(a.id)}|canCreate" ${a.canCreate||a.isAdmin?'checked':''} ${a.isAdmin||ro?'disabled':''}></td><td>${self?'<span class="pill aktiv">aktiv</span>':`<span class="pill ${a.active===false?'pausiert':'aktiv'}" ${ro?'':`data-act="toggleActive" data-id="${esc(a.id)}" style="cursor:pointer" title="Sperren / entsperren"`}>${a.active===false?'🔒 gesperrt':'aktiv'}</span>`}</td><td class="projlist">${ups.length?ups.map(x=>`${esc(x.p.name)} <span style="opacity:.7">· ${esc(roleName(x.p,x.m.roleId))}</span>`).join('<br>'):'–'}${ro?'':`<br><a href="#" data-act="assignUser" data-id="${esc(a.id)}">Projekte zuteilen …</a>`}</td><td style="white-space:nowrap">${ro?'':`<button class="ghost sm" data-act="resetPw" data-id="${esc(a.id)}" title="Passwort zurücksetzen">🔑</button>${self?'':`<button class="ghost sm danger" data-act="delUser" data-id="${esc(a.id)}" title="Benutzer löschen">✕</button>`}`}</td></tr>`}).join('');
+  return `<tr><td><div class="row" style="flex-wrap:nowrap"><span class="av sm" style="background:${avColor(a.id)}">${esc(initials(a.name))}</span><a href="#" data-act="editUser" data-id="${esc(a.id)}" style="color:inherit;font-weight:600">${esc(a.name)}</a>${self?'<span class="pill">Du</span>':''}</div></td><td><code>${esc(a.username)}</code></td><td>${esc(a.email||'–')}</td><td><input type="checkbox" data-afc="${esc(a.id)}|isAdmin" ${a.isAdmin?'checked':''} ${self||ro?'disabled':''}></td><td><input type="checkbox" data-afc="${esc(a.id)}|canCreate" ${a.canCreate||a.isAdmin?'checked':''} ${a.isAdmin||ro?'disabled':''}></td><td>${self?'<span class="pill aktiv">aktiv</span>':`<span class="pill ${a.active===false?'pausiert':'aktiv'}" ${ro?'':`data-act="toggleActive" data-id="${esc(a.id)}" style="cursor:pointer" title="Sperren / entsperren"`}>${a.active===false?'🔒 gesperrt':'aktiv'}</span>`}</td><td class="projlist">${ups.length?ups.map(x=>`${esc(x.p.name)} <span style="opacity:.7">· ${esc(roleName(x.p,x.m.roleId))}</span>`).join('<br>'):'–'}${ro?'':`<br><a href="#" data-act="assignUser" data-id="${esc(a.id)}">Projekte zuteilen …</a>`}</td><td style="white-space:nowrap">${ro?'':`<button class="sm" data-act="editUser" data-id="${esc(a.id)}" title="Name, Benutzername, Passwort, Rechte & Projekte ändern">✏️ Bearbeiten</button><button class="ghost sm" data-act="resetPw" data-id="${esc(a.id)}" title="Nur Passwort zurücksetzen">🔑</button>${self?'':`<button class="ghost sm danger" data-act="delUser" data-id="${esc(a.id)}" title="Benutzer löschen">✕</button>`}`}</td></tr>`}).join('');
  h+=`</tbody></table></div></div>`;
  h+=`<p class="sm mut" style="margin-top:14px">🔐 ${S.mode==='supa'?'Login & Passwörter laufen über Supabase Auth (serverseitig geprüft, bcrypt-verschlüsselt). Zugriffsrechte setzt die Datenbank selbst durch. ':''}Passwörter werden nur verschlüsselt gespeichert – niemand kann sie im Klartext auslesen, auch du nicht. Vergessene Passwörter setzt du mit 🔑 zurück; danach sind alte Anmeldungen der Person ungültig.</p></main>`;
  return h;
@@ -851,6 +851,29 @@ function pwModal(id){
  modal(`<div class="mh"><h3>${self?'Passwort ändern':'Passwort zurücksetzen – '+esc(a.name)}</h3><button class="ghost" data-act="closeModal">✕</button></div>
  ${self?`<label class="fld"><span>Aktuelles Passwort</span><input id="pwOld" type="password" data-autofocus autocomplete="current-password"></label><label class="fld"><span>Neues Passwort (mind. 8 Zeichen)</span><input id="pwNew" type="password" autocomplete="new-password"></label><label class="fld"><span>Neues Passwort wiederholen</span><input id="pwNew2" type="password" autocomplete="new-password" data-enter="doPw"></label>`:`<label class="fld"><span>Neues Passwort</span><div class="pwrow"><input id="pwNew" value="${esc(genPw())}"><button data-act="genPw" data-id="pwNew">🎲</button></div></label>`}
  <div class="lerr" id="pwErr"></div><div class="mf"><button data-act="closeModal">Abbrechen</button><button class="pri" data-act="doPw" data-id="${esc(id||'')}">Speichern</button></div>`);
+}
+function editUserModal(id){
+ const a=S.accounts[id];if(!a)return;S.editId=id;const self=S.account&&S.account.id===id;
+ const cur={};userProjects(a).forEach(x=>cur[x.p.id]=x.m.roleId);
+ modal(`<div class="mh"><h3>✏️ Benutzer bearbeiten</h3><button class="ghost" data-act="closeModal">✕</button></div>
+ <label class="fld"><span>Name</span><input id="euName" value="${esc(a.name)}"></label>
+ <div class="row" style="gap:12px;flex-wrap:nowrap"><label class="fld"><span>Benutzername (für den Login)</span><input id="euUser" value="${esc(a.username)}" autocapitalize="none"></label><label class="fld"><span>E-Mail</span><input id="euMail" value="${esc(a.email||'')}" placeholder="optional"></label></div>
+ <label class="fld"><span>Neues Passwort <span style="font-weight:400">(leer lassen = bleibt gleich)</span></span><div class="pwrow"><input id="euPw" placeholder="unverändert" autocomplete="new-password"><button data-act="genPw" data-id="euPw" title="Passwort erzeugen">🎲</button></div></label>
+ <div class="row" style="gap:18px;margin-bottom:12px"><label class="row sm"><input type="checkbox" id="euAdmin" ${a.isAdmin?'checked':''} ${self?'disabled':''}> Admin</label><label class="row sm"><input type="checkbox" id="euCreate" ${a.canCreate||a.isAdmin?'checked':''}> Darf Projekte anlegen</label><label class="row sm"><input type="checkbox" id="euActive" ${a.active!==false?'checked':''} ${self?'disabled':''}> Konto aktiv</label></div>
+ <div class="fld"><span>Projekte & Rollen</span>${assignRows(cur)}</div>
+ <div class="lerr" id="euErr"></div>
+ <div class="mf"><button data-act="closeModal">Abbrechen</button><button class="pri" data-act="doEditUser">Speichern</button></div>`);
+}
+function myAccountModal(){
+ const a=S.account;
+ modal(`<div class="mh"><h3>👤 Mein Konto</h3><button class="ghost" data-act="closeModal">✕</button></div>
+ <p class="sm mut">Benutzername: <b>${esc(a.username)}</b></p>
+ <label class="fld"><span>Mein Name</span><div class="pwrow"><input id="myName" value="${esc(a.name)}" data-enter="doMyName"><button data-act="doMyName">Speichern</button></div></label>
+ <h3 style="margin:18px 0 10px">Passwort ändern</h3>
+ <label class="fld"><span>Aktuelles Passwort</span><input id="pwOld" type="password" autocomplete="current-password"></label>
+ <label class="fld"><span>Neues Passwort (mind. 8 Zeichen)</span><input id="pwNew" type="password" autocomplete="new-password"></label>
+ <label class="fld"><span>Neues Passwort wiederholen</span><input id="pwNew2" type="password" autocomplete="new-password" data-enter="doPw"></label>
+ <div class="lerr" id="pwErr"></div><div class="mf"><button data-act="closeModal">Schließen</button><button class="pri" data-act="doPw" data-id="">Passwort ändern</button></div>`);
 }
 function addMemberModal(){
  const p=P();const used=new Set(p.members.map(m=>m.accountId).filter(Boolean));
@@ -1058,7 +1081,7 @@ const ACT={
  users(el,e){S.view='users';S.preview=null;closeModal();render();window.scrollTo(0,0);},
  userMenu(el,e){e.stopPropagation();const items=[{sep:S.account.name+' · '+(S.account.virtual?'Notfallzugang':S.account.username)}];
   if(isAdmin())items.push({l:'👤 Benutzerverwaltung',fn:()=>ACT.users()});
-  if(!S.account.virtual)items.push({l:'🔑 Passwort ändern',fn:()=>pwModal()});
+  if(!S.account.virtual)items.push({l:'👤 Mein Konto (Name & Passwort)',fn:()=>myAccountModal()});
   items.push({l:'↩︎ Abmelden',fn:()=>ACT.logout()});openMenu(el,items);},
  logout(){S.account=null;S.preview=null;S.view='home';S.pid=null;clearSession();closeModal();render();toast('Abgemeldet');},
  async doSetup(){const err=$('#lerr');const name=$('#suName').value.trim(),u=normU($('#suUser').value),pw=$('#suPw').value,pw2=$('#suPw2').value;
@@ -1100,6 +1123,30 @@ const ACT={
   Object.values(S.projects).map(ensure).forEach(p=>{if(p.members.some(m=>m.accountId===a.id)){const ms=clone(p.members);ms.forEach(m=>{if(m.accountId===a.id){m.accountId='';m.name=a.name;}});savePatch(p,{members:ms});}});
   delete S.accounts[a.id];Store.del('accounts/'+a.id);render();toast('Benutzer gelöscht');});},
  addMember(){addMemberModal();},
+ editUser(el,e){if(e)e.preventDefault();if(!isAdmin())return;editUserModal(el.dataset.id);},
+ async doMyName(){const err=$('#pwErr');const n=$('#myName').value.trim();if(!n)return err.textContent='Bitte einen Namen eingeben.';const a=S.account;
+  if(S.mode==='supa'){const r=await S.sb.rpc('cockpit_update_my_name',{new_name:n});if(r.error)return err.textContent=supaErr(r.error);a.name=n;if(S.accounts[a.id])S.accounts[a.id].name=n;}
+  else{a.name=n;Store.patch('accounts/'+a.id,{name:n});}
+  render();toast('Name gespeichert ✓');err.textContent='';},
+ async doEditUser(){const err=$('#euErr');const id=S.editId;const a=S.accounts[id];if(!a)return;const self=S.account.id===id;
+  const name=$('#euName').value.trim(),u=normU($('#euUser').value),mail=$('#euMail').value.trim(),pw=$('#euPw').value;
+  const isAd=self?a.isAdmin:$('#euAdmin').checked,canC=isAd||$('#euCreate').checked,act=self?true:$('#euActive').checked;const assign=readAssign();
+  if(!name)return err.textContent='Bitte einen Namen eingeben.';
+  if(!validU(u))return err.textContent='Benutzername: nur Kleinbuchstaben, Zahlen sowie . _ - (mind. 2 Zeichen)';
+  if(Object.values(S.accounts).some(x=>x.id!==id&&normU(x.username)===u))return err.textContent='Benutzername „'+u+'“ ist bereits vergeben.';
+  if(pw&&pw.length<8)return err.textContent='Das neue Passwort braucht mind. 8 Zeichen.';
+  if(a.isAdmin&&(!isAd||!act)&&Object.values(S.accounts).filter(x=>x.isAdmin&&x.active!==false).length<=1)return err.textContent='Es muss mindestens einen aktiven Admin geben.';
+  err.textContent='Wird gespeichert …';
+  try{
+   if(S.mode==='supa'){
+    if(u!==normU(a.username)){const r=await S.sb.rpc('cockpit_admin_set_username',{target:id,new_username:u,login_domain:LOGIN_DOMAIN});if(r.error)return err.textContent=supaErr(r.error);}
+    if(pw){const r=self?await S.sb.auth.updateUser({password:pw}):await S.sb.rpc('cockpit_admin_set_password',{target:id,new_password:pw});if(r.error)return err.textContent=supaErr(r.error);}
+   }else if(pw){const salt=uid()+uid();Object.assign(a,{salt,hash:await hashPw(pw,salt),pwChangedAt:Date.now()});if(self)saveSession(a.id,true);}
+  }catch(x){return err.textContent=supaErr(x);}
+  const patch={name,username:u,email:mail,isAdmin:isAd,canCreate:canC,active:act};
+  if(S.mode!=='supa'&&a.hash)Object.assign(patch,{salt:a.salt,hash:a.hash,pwChangedAt:a.pwChangedAt||0});
+  deepMerge(a,patch);Store.patch('accounts/'+id,patch);applyAssign(a,assign);
+  render();if(pw&&!self)credModal(a,pw,'🔑 Neue Zugangsdaten für '+name);else{closeModal();toast('Benutzer gespeichert ✓');}},
  doAddMember(){const p=P();const acc=$('#amAcc').value,role=$('#amRole').value;let m;
   if(acc){const a=S.accounts[acc];if(!a)return;m={id:'m_'+uid(),name:a.name,email:a.email||'',roleId:role,accountId:a.id,status:'aktiv'};}
   else{const n=$('#amName').value.trim();if(!n){$('#amName').focus();return toast('Bitte einen Namen eingeben');}m={id:'m_'+uid(),name:n,email:'',roleId:role,accountId:'',status:'aktiv'};}
