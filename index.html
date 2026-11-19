@@ -337,6 +337,13 @@ const SECTIONS=[
   {kind:'table',key:'lessons',title:'Lessons Learned',add:'Erkenntnis hinzufügen',cols:[{k:'thema',l:'Thema',t:'text',w:180},{k:'gut',l:'Was lief gut?',t:'textarea'},{k:'schlecht',l:'Was lief weniger gut?',t:'textarea'},{k:'empfehlung',l:'Empfehlung für künftige Projekte',t:'textarea'}]}]},
 ];
 
+/* ===== Online-Datenbank (Supabase) – für die Website =====
+   Wenn URL & Key eingetragen sind, läuft die Website als Mehrbenutzer-System. */
+const SUPABASE_URL='';   // z. B. https://abcdefgh.supabase.co
+const SUPABASE_KEY='';   // öffentlicher Schlüssel (anon / publishable)
+const LOGIN_DOMAIN='login.projektcockpit.app';  // interne Login-Adressen, es werden keine Mails verschickt
+const toEmail=u=>normU(u)+'@'+LOGIN_DOMAIN;
+
 /* ===== State ===== */
 const S={mode:'local',projects:{},tasks:{},accounts:{},account:null,view:'home',pid:null,tab:'overview',hbSec:'auftrag',board:'status',filter:{q:'',m:'',p:''},preview:null,loading:true,canWrite:true,uid:null,isOwner:true,myName:'',profiles:{},user:null,db:null,netNote:'',dirty:false,qa:null};
 const P=()=>S.projects[S.pid];
@@ -360,7 +367,7 @@ function restoreSession(){
 function syncAccount(){
  if(!S.account||S.account.virtual)return;
  const a=S.accounts[S.account.id];
- if(!a||a.active===false){S.account=null;clearSession();toast('Du wurdest abgemeldet.');return;}
+ if(!a||a.active===false){S.account=null;clearSession();toast('Du wurdest abgemeldet.');if(S.mode==='supa')supaLogout().then(render);return;}
  S.account=a;
 }
 async function hashPw(pw,salt){
@@ -375,25 +382,28 @@ const userSlug=n=>normU(n).normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/ß/g
 let loginFails=0,loginLock=0;
 const Store={pending:{},inflight:{},timers:{},
  busy(p){return !!(this.pending[p]||this.inflight[p]);},
- set(path,data){if(S.mode!=='db')return saveLocal();this.pending[path]={mode:'set',data:clone(data)};this.kick(path,250);},
- patch(path,patch){if(S.mode!=='db')return saveLocal();const c=this.pending[path];if(c&&c.mode!=='delete')deepMerge(c.data,clone(patch));else this.pending[path]={mode:'update',data:clone(patch)};this.kick(path,600);},
- del(path){if(S.mode!=='db')return saveLocal();this.pending[path]={mode:'delete'};this.kick(path,0);},
+ set(path,data){if(S.mode==='local')return saveLocal();this.pending[path]={mode:'set',data:clone(data)};this.kick(path,250);},
+ patch(path,patch){if(S.mode==='local')return saveLocal();const c=this.pending[path];if(c&&c.mode!=='delete')deepMerge(c.data,clone(patch));else this.pending[path]={mode:'update',data:clone(patch)};this.kick(path,600);},
+ del(path){if(S.mode==='local')return saveLocal();this.pending[path]={mode:'delete'};this.kick(path,0);},
  kick(path,ms){clearTimeout(this.timers[path]);this.timers[path]=setTimeout(()=>this.flush(path),ms);},
  async flush(path){
   if(this.inflight[path]||!this.pending[path])return;
+  if(S.mode==='supa'&&this.pending[path].mode==='set'&&path.startsWith('tasks/')){const t=S.tasks[path.slice(6)];if(t&&this.busy('projects/'+t.pid)){this.kick(path,400);return;}}
   const job=this.pending[path];delete this.pending[path];this.inflight[path]=true;
-  const ref=S.db.doc(path);
+  const ref=S.mode==='db'?S.db.doc(path):null;
   try{await this.run(ref,job,path);}
   catch(e){if(e&&e.code==='unavailable'){await sleep(700+Math.random()*900);try{await this.run(ref,job,path)}catch(e2){this.fail(e2)}}else this.fail(e);}
   finally{delete this.inflight[path];if(this.pending[path])this.kick(path,150);}
  },
  async run(ref,job,path){
+  if(S.mode==='supa')return supaRun(path,job);
   if(job.mode==='delete')return ref.delete();
   if(job.mode==='set')return ref.set(job.data);
   try{return await ref.update(job.data);}
   catch(e){if(e&&e.code==='invalid_argument'){const [c,id]=path.split('/');const full=S[c]&&S[c][id];if(full)return ref.set(clone(full));}throw e;}
  },
  fail(e){
+  if(S.mode==='supa'){toast('Nicht gespeichert: '+supaErr(e));supaReload();return;}
   const c=e&&e.code;
   if(c==='invalid_argument'){S.canWrite=false;toast('Keine Schreibrechte – Änderungen werden nicht gespeichert.');render();}
   else if(c==='quota_exceeded')toast('Speicher voll: '+(e.message||''));
@@ -402,6 +412,65 @@ const Store={pending:{},inflight:{},timers:{},
  }};
 function savePatch(p,patch){deepMerge(p,clone(patch));Store.patch('projects/'+p.id,patch);}
 function updTask(t,patch){deepMerge(t,clone(patch));Store.patch('tasks/'+t.id,patch);}
+
+/* ===== Supabase-Anbindung ===== */
+const SB_TABLE={projects:'projects',tasks:'tasks',accounts:'profiles'};
+function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
+const rowTo={projects:r=>Object.assign({},r.data||{},{id:r.id,createdBy:r.created_by}),tasks:r=>Object.assign({},r.data||{},{id:r.id,pid:r.project_id}),accounts:r=>({id:r.id,name:r.name||r.username,username:r.username,email:r.email||'',isAdmin:!!r.is_admin,canCreate:!!r.can_create,active:r.active!==false})};
+function supaErr(e){const m=String((e&&(e.message||e.error_description))||e||'Fehler');
+ if(/saving new user|nicht erlaubt/i.test(m))return 'Registrierung ist nicht erlaubt.';
+ if(/already registered|already exists|duplicate key/i.test(m))return 'Dieser Benutzername ist bereits vergeben.';
+ if(/rate limit|too many/i.test(m))return 'Zu viele Versuche – bitte kurz warten.';
+ if(/row-level security|permission|Keine Berechtigung/i.test(m))return 'Keine Berechtigung.';
+ if(/Password should|weak/i.test(m))return 'Passwort zu schwach (mind. 8 Zeichen).';
+ return m;}
+async function supaRun(path,job){
+ const [c,id]=path.split('/');const tb=S.sb.from(SB_TABLE[c]);let r;
+ if(job.mode==='delete'){
+  if(c==='accounts')r=await S.sb.rpc('cockpit_admin_delete_user',{target:id});
+  else r=await tb.delete().eq('id',id);
+ }else{
+  const o=S[c][id];if(!o)return;
+  if(c==='accounts')r=await tb.update({name:o.name,email:o.email||'',is_admin:!!o.isAdmin,can_create:!!(o.canCreate||o.isAdmin),active:o.active!==false}).eq('id',id).select('id');
+  else{
+   const row=c==='projects'?{data:o}:{project_id:o.pid,data:o};
+   if(job.mode==='set'){row.id=id;if(c==='projects')row.created_by=o.createdBy;r=await tb.insert(row);}
+   else{row.updated_at=new Date().toISOString();r=await tb.update(row).eq('id',id).select('id');}
+  }
+  if(r&&!r.error&&Array.isArray(r.data)&&!r.data.length)throw {message:'Keine Berechtigung'};
+ }
+ if(r&&r.error)throw r.error;
+}
+function mergeColl(c,rows){const map={};(rows||[]).forEach(r=>{const o=rowTo[c](r);const p=c+'/'+o.id;map[o.id]=Store.busy(p)&&S[c][o.id]?S[c][o.id]:o;});for(const id in S[c]){const p=c+'/'+id;if(!map[id]&&Store.busy(p)&&!(Store.pending[p]&&Store.pending[p].mode==='delete'))map[id]=S[c][id];}S[c]=map;}
+async function supaLoadAll(){
+ const sb=S.sb;const [a,p,t]=await Promise.all([sb.from('profiles').select('*'),sb.from('projects').select('id,data,created_by'),sb.from('tasks').select('id,project_id,data')]);
+ const e=a.error||p.error||t.error;if(e)throw e;
+ mergeColl('accounts',a.data);mergeColl('projects',p.data);mergeColl('tasks',t.data);
+}
+let supaPoll=null,supaChan=null;
+async function supaReload(){if(!S.account)return;try{await supaLoadAll();syncAccount();}catch(e){}scheduleRender();}
+async function supaCheckSetup(){try{const {data,error}=await S.sb.rpc('cockpit_needs_setup');S.needsSetup=!error&&data===true;S.netNote=error?'Die Datenbank ist noch nicht eingerichtet – bitte das SQL-Setup in Supabase ausführen.':'';}catch(e){S.needsSetup=false;}}
+async function initSupa(){
+ S.mode='supa';
+ try{await loadScript('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js');S.sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);}
+ catch(e){S.loading=false;S.netNote='Die Online-Datenbank konnte nicht geladen werden. Bitte Internetverbindung prüfen.';render();return;}
+ try{const {data}=await S.sb.auth.getSession();if(data&&data.session){await supaAfterLogin(data.session.user.id);return;}}catch(e){}
+ await supaCheckSetup();S.loading=false;render();
+}
+async function supaAfterLogin(uid){
+ try{await supaLoadAll();}catch(e){S.loading=false;S.netNote='Daten konnten nicht geladen werden: '+supaErr(e);render();return false;}
+ const a=S.accounts[uid];
+ if(!a||a.active===false){await supaLogout();S.loading=false;render();return 'inactive';}
+ S.account=a;S.needsSetup=false;S.netNote='';S.loading=false;restoreView();
+ if(S.pid&&(!P()||!visible(ensure(P())))){S.view='home';S.pid=null;}
+ render();supaLive();return true;
+}
+function supaLive(){
+ if(!supaChan){try{supaChan=S.sb.channel('cockpit-live');['projects','tasks','profiles'].forEach(tb=>supaChan.on('postgres_changes',{event:'*',schema:'public',table:tb},pl=>onRt(tb==='profiles'?'accounts':tb,pl)));supaChan.subscribe();}catch(e){}}
+ if(!supaPoll)supaPoll=setInterval(()=>{if(S.account&&!document.hidden)supaReload();},45000);
+}
+function onRt(c,pl){const row=pl.new&&pl.new.id?pl.new:null;const id=row?row.id:(pl.old&&pl.old.id);if(!id||!S.account)return;if(Store.busy(c+'/'+id))return;if(pl.eventType==='DELETE')delete S[c][id];else S[c][id]=rowTo[c](row);if(c==='accounts')syncAccount();scheduleRender();}
+async function supaLogout(){try{await S.sb.auth.signOut();}catch(e){}if(supaChan){try{S.sb.removeChannel(supaChan);}catch(e){}supaChan=null;}clearInterval(supaPoll);supaPoll=null;S.account=null;S.accounts={};S.projects={};S.tasks={};await supaCheckSetup();}
 
 async function init(){
  render();
@@ -417,7 +486,7 @@ async function init(){
   try{const cw=user?await user.can('data.write'):null;if(cw===false)S.canWrite=false;}catch(e){}
   try{if(user&&S.uid){const me=await user.me();S.myName=(me&&me.name)||'';}}catch(e){}
   subscribe();
- }else{loadLocal();S.loading=false;restoreSession();restoreView();render();}
+ }else if(SUPABASE_URL&&SUPABASE_KEY){await initSupa();}else{loadLocal();S.loading=false;restoreSession();restoreView();render();}
 }
 function subscribe(){
  let gp=false,gt=false,ga=false;
@@ -487,7 +556,7 @@ function render(){
  const app=$('#app');
  if(S.loading){app.innerHTML=topbar()+`<div class="loading"><div class="spin"></div>Cockpit wird geladen …</div>`;return;}
  const credit=`<p class="credit">Cockpit von Luca Kofler</p>`;
- if(!Object.keys(S.accounts).length&&!S.account){app.innerHTML=topbar()+banners()+setupView()+credit;return focusFirst();}
+ if(!S.account&&(S.mode==='supa'?S.needsSetup:!Object.keys(S.accounts).length)){app.innerHTML=topbar()+banners()+setupView()+credit;return focusFirst();}
  if(!S.account){app.innerHTML=topbar()+banners()+loginView()+credit;return focusFirst();}
  if(S.view==='users'&&!isAdmin())S.view='home';
  const p=S.view==='project'&&P()?ensure(P()):null;
@@ -504,7 +573,7 @@ function autoGrow(el){if(!el.closest('.tbl'))return;el.style.height='auto';el.st
 function focusFirst(){setTimeout(()=>{const i=document.querySelector('#app .login input');if(i&&!document.activeElement.closest('#app'))i.focus();},30);}
 function setupView(){
  if(!S.canWrite)return `<main class="wrap"><div class="card login"><h2>Noch nicht eingerichtet</h2><p class="mut">Das Cockpit hat noch kein Admin-Konto. Bitte den Eigentümer, es einzurichten.</p></div></main>`;
- return `<main class="wrap"><div class="card login"><div class="lh"><span class="logo">◆</span><h2>Willkommen im Projekt-Cockpit</h2><p class="mut sm">Lege zuerst dein Admin-Konto an. Damit verwaltest du später alle Benutzer, Projekte und Rechte.</p></div>
+ return `<main class="wrap"><div class="card login"><div class="lh"><span class="logo">◆</span><h2>Willkommen im Projekt-Cockpit</h2><p class="mut sm">Lege zuerst dein Admin-Konto an. Damit verwaltest du später alle Benutzer, Projekte und Rechte.${S.mode==='supa'?' Danach kann sich niemand mehr selbst registrieren – neue Konten legst nur du an.':''}</p></div>
  <label class="fld"><span>Dein Name</span><input id="suName" value="${esc(S.myName||'')}" placeholder="Vor- und Nachname"></label>
  <label class="fld"><span>Benutzername</span><input id="suUser" placeholder="z. B. luca" autocomplete="username"></label>
  <label class="fld"><span>Passwort (mind. 8 Zeichen)</span><input id="suPw" type="password" autocomplete="new-password"></label>
@@ -515,7 +584,7 @@ function loginView(){
  return `<main class="wrap"><form class="card login" onsubmit="return false"><div class="lh"><span class="logo">◆</span><h2>Anmelden</h2><p class="mut sm">Melde dich mit deinem Benutzernamen und Passwort an.</p></div>
  <label class="fld"><span>Benutzername</span><input id="liUser" autocomplete="username" autocapitalize="none"></label>
  <label class="fld"><span>Passwort</span><input id="liPw" type="password" autocomplete="current-password" data-enter="doLogin"></label>
- <label class="row sm" style="margin:2px 0 6px"><input type="checkbox" id="liKeep" checked> Angemeldet bleiben</label>
+ <label class="row sm" style="margin:2px 0 6px;${S.mode==='supa'?'display:none':''}"><input type="checkbox" id="liKeep" checked> Angemeldet bleiben</label>
  <div class="lerr" id="lerr"></div><button class="pri" data-act="doLogin">Anmelden</button>
  <p class="sm mut" style="text-align:center;margin:14px 0 0">Passwort vergessen? Wende dich an deine:n Administrator:in.</p>
  ${S.mode==='db'&&S.isOwner?`<p class="sm" style="text-align:center;margin:8px 0 0"><a href="#" data-act="ownerLogin">Als Cockpit-Eigentümer anmelden (Notfallzugang)</a></p>`:''}</form></main>`;
@@ -527,7 +596,7 @@ function topbar(){
  if(p&&isSuper(p)&&(p.members||[]).length){
   prev=`<select class="prevsel" data-chg="preview" title="Rechte-Vorschau: so sieht eine Person das Projekt"><option value="">👁 Ansicht als: Admin</option>${p.members.map(m=>`<option value="${m.id}" ${inPreview(p)&&S.preview.mid===m.id?'selected':''}>👁 ${esc(mName(p,m))} – ${esc(roleName(p,m.roleId))}</option>`).join('')}</select>`;
  }
- return `<header class="top"><div class="brand" data-act="home"><span class="logo">◆</span><b>Projekt-Cockpit</b></div>${p?`<span class="crumb">/</span><span class="crumbp"><i class="dot" style="background:${esc(p.color)}"></i>${esc(p.name)}</span>`:''}<div class="sp"></div>${prev}<span class="modebadge ${S.mode==='db'?'':'loc'}" title="${S.mode==='db'?'Daten werden live mit allen Personen geteilt, die das Cockpit öffnen':'Daten werden nur in diesem Browser gespeichert'}">${S.mode==='db'?'● Live · geteilt':'● Lokal gespeichert'}</span>${uc}<button class="help" data-act="help" title="Hilfe – alles erklärt">?</button></header>`;
+ return `<header class="top"><div class="brand" data-act="home"><span class="logo">◆</span><b>Projekt-Cockpit</b></div>${p?`<span class="crumb">/</span><span class="crumbp"><i class="dot" style="background:${esc(p.color)}"></i>${esc(p.name)}</span>`:''}<div class="sp"></div>${prev}<span class="modebadge ${S.mode==='local'?'loc':''}" title="${S.mode==='local'?'Daten werden nur in diesem Browser gespeichert':'Alle Daten liegen in einer gemeinsamen Online-Datenbank'}">${S.mode==='db'?'● Live · geteilt':S.mode==='supa'?'● Online · Mehrbenutzer':'● Lokal gespeichert'}</span>${uc}<button class="help" data-act="help" title="Hilfe – alles erklärt">?</button></header>`;
 }
 function banners(){
  let b='';
@@ -745,7 +814,7 @@ function usersView(){
  h+=accs.map(a=>{const self=S.account&&S.account.id===a.id;const ups=userProjects(a);const d=ro?'disabled':'';
   return `<tr><td><div class="row" style="flex-wrap:nowrap"><span class="av sm" style="background:${avColor(a.id)}">${esc(initials(a.name))}</span><input data-af="${esc(a.id)}|name" value="${esc(a.name)}" ${d}>${self?'<span class="pill">Du</span>':''}</div></td><td><code>${esc(a.username)}</code></td><td><input data-af="${esc(a.id)}|email" value="${esc(a.email||'')}" placeholder="optional" ${d}></td><td><input type="checkbox" data-afc="${esc(a.id)}|isAdmin" ${a.isAdmin?'checked':''} ${self||ro?'disabled':''}></td><td><input type="checkbox" data-afc="${esc(a.id)}|canCreate" ${a.canCreate||a.isAdmin?'checked':''} ${a.isAdmin||ro?'disabled':''}></td><td>${self?'<span class="pill aktiv">aktiv</span>':`<span class="pill ${a.active===false?'pausiert':'aktiv'}" ${ro?'':`data-act="toggleActive" data-id="${esc(a.id)}" style="cursor:pointer" title="Sperren / entsperren"`}>${a.active===false?'🔒 gesperrt':'aktiv'}</span>`}</td><td class="projlist">${ups.length?ups.map(x=>`${esc(x.p.name)} <span style="opacity:.7">· ${esc(roleName(x.p,x.m.roleId))}</span>`).join('<br>'):'–'}${ro?'':`<br><a href="#" data-act="assignUser" data-id="${esc(a.id)}">Projekte zuteilen …</a>`}</td><td style="white-space:nowrap">${ro?'':`<button class="ghost sm" data-act="resetPw" data-id="${esc(a.id)}" title="Passwort zurücksetzen">🔑</button>${self?'':`<button class="ghost sm danger" data-act="delUser" data-id="${esc(a.id)}" title="Benutzer löschen">✕</button>`}`}</td></tr>`}).join('');
  h+=`</tbody></table></div></div>`;
- h+=`<p class="sm mut" style="margin-top:14px">🔐 Passwörter werden nur verschlüsselt (PBKDF2-Hash) gespeichert – niemand kann sie im Klartext auslesen, auch du nicht. Vergessene Passwörter setzt du mit 🔑 zurück; danach sind alte Anmeldungen der Person ungültig.</p></main>`;
+ h+=`<p class="sm mut" style="margin-top:14px">🔐 ${S.mode==='supa'?'Login & Passwörter laufen über Supabase Auth (serverseitig geprüft, bcrypt-verschlüsselt). Zugriffsrechte setzt die Datenbank selbst durch. ':''}Passwörter werden nur verschlüsselt gespeichert – niemand kann sie im Klartext auslesen, auch du nicht. Vergessene Passwörter setzt du mit 🔑 zurück; danach sind alte Anmeldungen der Person ungültig.</p></main>`;
  return h;
 }
 function assignRows(preset){
@@ -774,7 +843,7 @@ function userModal(pid){
  <div class="mf"><button data-act="closeModal">Abbrechen</button><button class="pri" data-act="doNewUser">Benutzer anlegen</button></div>`);
 }
 function credModal(a,pw,title){
- const txt=`Hallo ${firstName(a.name)},\n\nhier sind deine Zugangsdaten für das Projekt-Cockpit:\n\nLink: [LINK ZUM COCKPIT]\nBenutzername: ${a.username}\nPasswort: ${pw}\n\nBitte ändere dein Passwort nach der ersten Anmeldung (oben rechts auf deinen Namen → „Passwort ändern“).\n\nLiebe Grüße\n${S.account?S.account.name:''}`;
+ const txt=`Hallo ${firstName(a.name)},\n\nhier sind deine Zugangsdaten für das Projekt-Cockpit:\n\nLink: ${S.mode==='supa'?location.origin+location.pathname:'[LINK ZUM COCKPIT]'}\nBenutzername: ${a.username}\nPasswort: ${pw}\n\nBitte ändere dein Passwort nach der ersten Anmeldung (oben rechts auf deinen Namen → „Passwort ändern“).\n\nLiebe Grüße\n${S.account?S.account.name:''}`;
  modal(`<div class="mh"><h3>${esc(title||'🔑 Zugangsdaten')}</h3><button class="ghost" data-act="closeModal">✕</button></div><p class="sm mut">Das Passwort wird nur jetzt angezeigt – danach ist es nur noch verschlüsselt gespeichert.</p><textarea class="copybox" style="min-height:230px">${esc(txt)}</textarea><div class="mf"><button data-act="closeModal">Fertig</button><button class="pri" data-act="copyInvite">Zugangsdaten kopieren</button></div>`);
 }
 function pwModal(id){
@@ -902,7 +971,7 @@ function helpModal(){
  <li><b>Benutzerverwaltung</b> (Admins: oben rechts auf deinen Namen oder Button auf der Startseite): Benutzer anlegen, Passwort vergeben/zurücksetzen (🔑), sperren, löschen, zum Admin machen, „Darf Projekte anlegen“ erlauben und direkt Projekten mit Rolle zuteilen.</li>
  <li>Beim Anlegen erhältst du fertige <b>Zugangsdaten zum Kopieren</b>. Jede Person kann ihr Passwort selbst ändern.</li>
  <li><b>Admins</b> sehen alles. Wer ein Projekt anlegt, hat darin alle Rechte.</li>
- <li>${S.mode==='db'?'Damit sich andere einloggen können, teile das Cockpit auf claude.ai (mind. „Mitwirkende:r“). Als Eigentümer:in hast du zusätzlich einen Notfallzugang auf der Login-Seite.':'Aktuell im lokalen Modus: Daten liegen nur in diesem Browser.'}</li></ul>
+ <li>${S.mode==='db'?'Damit sich andere einloggen können, teile das Cockpit auf claude.ai (mind. „Mitwirkende:r“). Als Eigentümer:in hast du zusätzlich einen Notfallzugang auf der Login-Seite.':S.mode==='supa'?'Alle Daten liegen in einer gemeinsamen Online-Datenbank (Supabase). Niemand kann sich selbst registrieren – Konten legen nur Admins an. Welche Projekte jemand sieht, prüft die Datenbank selbst.':'Aktuell im lokalen Modus: Daten liegen nur in diesem Browser.'}</li></ul>
  <p class="sm mut">Hinweis zur Sicherheit: Passwörter werden nur als Hash gespeichert. Login und Sichtbarkeit werden in der Oberfläche durchgesetzt – für eine öffentliche Website mit sensiblen Daten sollte das Login zusätzlich serverseitig abgesichert werden (z. B. Supabase oder Firebase).</p>
  <h4>🌐 Später als Website</h4><p>Unter Einstellungen exportierst du jedes Projekt als JSON und importierst es auf der Startseite wieder – so lassen sich die Daten in eine eigene Website übernehmen.</p>
  <p class="sm mut" style="margin-top:18px">Cockpit von Luca Kofler</p></div>`,'wide');
@@ -1047,6 +1116,51 @@ const ACT={
   updTask(t,{comments:[...(t.comments||[]),{by:m?m.id:'',text:i.value.trim(),ts:new Date().toLocaleString('de-AT',{dateStyle:'short',timeStyle:'short'})}]});refresh();},
  delTask(){delTask(S.modalTask);},
 };
+const _A=Object.assign({},ACT);
+const validU=u=>/^[a-z0-9][a-z0-9._-]{1,39}$/.test(u);
+Object.assign(ACT,{
+ async doSetup(el,e){if(S.mode!=='supa')return _A.doSetup(el,e);
+  const err=$('#lerr');const name=$('#suName').value.trim(),u=normU($('#suUser').value),pw=$('#suPw').value,pw2=$('#suPw2').value;
+  if(!name||!u)return err.textContent='Bitte Name und Benutzername angeben.';if(!validU(u))return err.textContent='Benutzername: nur Kleinbuchstaben, Zahlen sowie . _ -';
+  if(pw.length<8)return err.textContent='Das Passwort braucht mind. 8 Zeichen.';if(pw!==pw2)return err.textContent='Die Passwörter stimmen nicht überein.';
+  err.textContent='Wird eingerichtet …';
+  const {data,error}=await S.sb.auth.signUp({email:toEmail(u),password:pw,options:{data:{username:u,name}}});
+  if(error)return err.textContent=supaErr(error);
+  if(!data.session)return err.textContent='Konto angelegt, aber nicht angemeldet: Bitte in Supabase unter Authentication → Sign In / Providers → Email „Confirm email“ ausschalten.';
+  const r=await supaAfterLogin(data.user.id);if(r===true)toast('Admin-Konto angelegt – willkommen, '+firstName(name)+'!');},
+ async doLogin(el,e){if(S.mode!=='supa')return _A.doLogin(el,e);
+  const err=$('#lerr');if(Date.now()<loginLock)return err.textContent='Zu viele Versuche – bitte kurz warten.';
+  const u=normU($('#liUser').value),pw=$('#liPw').value;if(!u||!pw)return err.textContent='Bitte Benutzername und Passwort eingeben.';
+  err.textContent='Anmelden …';
+  const {data,error}=await S.sb.auth.signInWithPassword({email:toEmail(u),password:pw});
+  if(error){loginFails++;if(loginFails>=5){loginLock=Date.now()+30000;loginFails=0;}const p=$('#liPw');if(p)p.value='';const e2=$('#lerr');if(e2)e2.textContent=/rate|too many/i.test(error.message||'')?supaErr(error):'Benutzername oder Passwort ist falsch.';return;}
+  loginFails=0;S.view='home';S.pid=null;const r=await supaAfterLogin(data.user.id);
+  if(r==='inactive'){const e2=$('#lerr');if(e2)e2.textContent='Dieses Konto ist gesperrt. Wende dich an deine:n Administrator:in.';}
+  else if(r===true)toast('Willkommen, '+firstName(S.account.name)+'!');},
+ async logout(el,e){if(S.mode!=='supa')return _A.logout(el,e);
+  S.preview=null;S.view='home';S.pid=null;closeModal();await supaLogout();render();toast('Abgemeldet');},
+ async doNewUser(el,e){if(S.mode!=='supa')return _A.doNewUser(el,e);
+  const err=$('#nuErr');const name=$('#nuName').value.trim(),u=normU($('#nuUser').value)||userSlug(name),pw=$('#nuPw').value,mail=$('#nuMail').value.trim();
+  if(!name)return err.textContent='Bitte einen Namen eingeben.';if(!validU(u))return err.textContent='Benutzername: nur Kleinbuchstaben, Zahlen sowie . _ -';
+  if(Object.values(S.accounts).some(x=>normU(x.username)===u))return err.textContent='Benutzername „'+u+'“ ist bereits vergeben.';
+  if(pw.length<8)return err.textContent='Das Passwort braucht mind. 8 Zeichen.';
+  const assign=readAssign();const isAd=$('#nuAdmin').checked,canC=isAd||$('#nuCreate').checked;
+  err.textContent='Wird angelegt …';
+  let r=await S.sb.from('pending_signups').upsert({email:toEmail(u),username:u,name,contact_email:mail,is_admin:isAd,can_create:canC});
+  if(r.error)return err.textContent=supaErr(r.error);
+  const tmp=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false,storageKey:'cockpit-tmp-'+uid()}});
+  const s=await tmp.auth.signUp({email:toEmail(u),password:pw,options:{data:{username:u,name}}});
+  if(s.error){await S.sb.from('pending_signups').delete().eq('email',toEmail(u));return err.textContent=supaErr(s.error);}
+  const id=s.data&&s.data.user&&s.data.user.id;try{await supaLoadAll();}catch(x){}
+  const a=id&&S.accounts[id];if(!a)return err.textContent='Der Benutzer konnte nicht angelegt werden (Benutzername evtl. schon vergeben).';
+  applyAssign(a,assign);render();credModal(a,pw,'✅ Benutzer „'+name+'“ angelegt');},
+ async doPw(el,e){if(S.mode!=='supa')return _A.doPw(el,e);
+  const err=$('#pwErr');const id=el.dataset.id;const nw=$('#pwNew').value;if(nw.length<8)return err.textContent='Das Passwort braucht mind. 8 Zeichen.';
+  if(!id){const a=S.account;if(nw!==$('#pwNew2').value)return err.textContent='Die neuen Passwörter stimmen nicht überein.';
+   const v=await S.sb.auth.signInWithPassword({email:toEmail(a.username),password:$('#pwOld').value});if(v.error)return err.textContent='Das aktuelle Passwort ist falsch.';
+   const r=await S.sb.auth.updateUser({password:nw});if(r.error)return err.textContent=supaErr(r.error);closeModal();toast('Passwort geändert ✓');}
+  else{const a=S.accounts[id];if(!a)return;const r=await S.sb.rpc('cockpit_admin_set_password',{target:id,new_password:nw});if(r.error)return err.textContent=supaErr(r.error);credModal(a,nw,'🔑 Neues Passwort für '+a.name);}},
+});
 document.addEventListener('click',e=>{
  if(e.target.classList&&e.target.classList.contains('ov')){closeModal();return;}
  const el=e.target.closest('[data-act]');if(!el)return;const a=ACT[el.dataset.act];if(!a)return;
