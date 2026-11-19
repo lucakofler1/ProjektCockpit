@@ -256,3 +256,67 @@ $$;
 drop policy if exists "profiles_read" on public.profiles;
 create policy "profiles_read" on public.profiles for select to authenticated
   using (public.cockpit_is_active() and (public.cockpit_is_admin() or id = auth.uid() or public.cockpit_shares_project(id)));
+
+-- ---------- Update: Postfach & Projekt-Forum ----------
+create table if not exists public.messages (
+  id          text primary key,
+  sender      uuid not null references auth.users(id) on delete cascade,
+  recipient   uuid not null references auth.users(id) on delete cascade,
+  body        text not null check (length(body) between 1 and 5000),
+  created_at  timestamptz not null default now(),
+  read_at     timestamptz
+);
+create index if not exists messages_recipient_idx on public.messages(recipient);
+create index if not exists messages_sender_idx on public.messages(sender);
+
+create table if not exists public.project_posts (
+  id          text primary key,
+  project_id  text not null references public.projects(id) on delete cascade,
+  author      uuid references auth.users(id) on delete set null,
+  parent_id   text references public.project_posts(id) on delete cascade,
+  category    text not null default 'diskussion' check (category in ('ankuendigung','diskussion','frage','info')),
+  title       text default '',
+  body        text not null check (length(body) between 1 and 10000),
+  pinned      boolean not null default false,
+  created_at  timestamptz not null default now()
+);
+create index if not exists posts_project_idx on public.project_posts(project_id);
+
+alter table public.messages      enable row level security;
+alter table public.project_posts enable row level security;
+
+drop policy if exists "messages_read"   on public.messages;
+drop policy if exists "messages_insert" on public.messages;
+create policy "messages_read" on public.messages for select to authenticated
+  using (public.cockpit_is_active() and (sender = auth.uid() or recipient = auth.uid()));
+create policy "messages_insert" on public.messages for insert to authenticated
+  with check (public.cockpit_is_active() and sender = auth.uid() and recipient <> auth.uid() and (
+    public.cockpit_is_admin() or public.cockpit_shares_project(recipient) or
+    exists (select 1 from public.messages m where m.sender = recipient and m.recipient = auth.uid())));
+
+create or replace function public.cockpit_mark_read(ids text[]) returns void
+language sql security definer set search_path = public as $$
+  update public.messages set read_at = now()
+   where id = any(ids) and recipient = auth.uid() and read_at is null
+$$;
+revoke execute on function public.cockpit_mark_read(text[]) from anon;
+
+drop policy if exists "posts_read"   on public.project_posts;
+drop policy if exists "posts_insert" on public.project_posts;
+drop policy if exists "posts_update" on public.project_posts;
+drop policy if exists "posts_delete" on public.project_posts;
+create policy "posts_read" on public.project_posts for select to authenticated
+  using (public.cockpit_project_access(project_id));
+create policy "posts_insert" on public.project_posts for insert to authenticated
+  with check (author = auth.uid() and public.cockpit_project_access(project_id, array['kommentieren'])
+    and (category <> 'ankuendigung' or public.cockpit_project_access(project_id, array['projekt_bearbeiten'])));
+create policy "posts_update" on public.project_posts for update to authenticated
+  using (author = auth.uid() or public.cockpit_project_access(project_id, array['projekt_bearbeiten']))
+  with check (author = auth.uid() or public.cockpit_project_access(project_id, array['projekt_bearbeiten']));
+create policy "posts_delete" on public.project_posts for delete to authenticated
+  using (author = auth.uid() or public.cockpit_project_access(project_id, array['projekt_bearbeiten']));
+
+do $$ begin
+  begin alter publication supabase_realtime add table public.messages;      exception when others then null; end;
+  begin alter publication supabase_realtime add table public.project_posts; exception when others then null; end;
+end $$;

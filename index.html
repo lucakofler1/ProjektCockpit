@@ -129,6 +129,35 @@ input:disabled,select:disabled,textarea:disabled{opacity:1;background:transparen
 @media (prefers-color-scheme:dark){.banner.due{background:#3a2a10;color:#ffcf8a}}
 .duel{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);cursor:pointer}
 .duel:last-child{border-bottom:0}
+.mailbtn{position:relative;width:34px;height:32px;padding:0;border-radius:10px;font-size:15px}
+.badge{position:absolute;top:-5px;right:-6px;background:var(--red);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;border:2px solid var(--bg)}
+.tabbadge{background:var(--red);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:0 6px;margin-left:5px}
+.inbox{display:grid;grid-template-columns:320px 1fr;gap:16px;align-items:start}
+@media (max-width:820px){.inbox{grid-template-columns:1fr}}
+.ilist{background:var(--card);border-radius:16px;box-shadow:var(--sh);padding:10px;max-height:calc(100vh - 170px);overflow:auto}
+.ci{display:flex;gap:10px;align-items:center;padding:9px 8px;border-radius:10px;cursor:pointer}
+.ci:hover{background:var(--soft)}.ci.on{background:rgba(0,113,227,.1)}
+.ci .t{flex:1;min-width:0}.ci .t b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ci .t span{display:block;font-size:12px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ub{background:var(--acc);color:#fff;font-size:11px;font-weight:700;border-radius:10px;padding:1px 7px}
+.tpane{background:var(--card);border-radius:16px;box-shadow:var(--sh);display:flex;flex-direction:column;height:calc(100vh - 170px);min-height:420px}
+.thead{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:center}
+.thread{flex:1;overflow:auto;padding:16px 18px;display:flex;flex-direction:column;gap:8px}
+.bub{max-width:72%;padding:8px 12px;border-radius:16px;background:var(--soft);white-space:pre-wrap;word-wrap:break-word;align-self:flex-start}
+.bub.me{background:var(--acc);color:#fff;align-self:flex-end}
+.bub .tm2{display:block;font-size:10px;opacity:.65;margin-top:3px}
+.dsep{align-self:center;font-size:11px;color:var(--mut);margin:6px 0}
+.tcomp{display:flex;gap:8px;padding:12px;border-top:1px solid var(--line);align-items:flex-end}
+.tcomp textarea{resize:none;max-height:140px}
+.pchips{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.pchip{font-size:11px;border-radius:8px;padding:1px 7px;background:var(--soft);color:var(--mut)}
+.post{background:var(--card);border-radius:16px;box-shadow:var(--sh);padding:16px 18px;margin-bottom:14px}
+.post.pin{box-shadow:0 0 0 2px #ff9500,var(--sh)}
+.ph2{display:flex;gap:10px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
+.cat{font-size:11px;font-weight:700;padding:2px 9px;border-radius:10px;color:#fff}
+.pbody{white-space:pre-wrap;word-wrap:break-word;margin:6px 0 10px}
+.replies{border-top:1px solid var(--line);margin-top:8px;padding-top:8px;display:flex;flex-direction:column;gap:8px}
+.reply{display:flex;gap:8px}.reply .rb{background:var(--soft);border-radius:12px;padding:7px 11px;flex:1;white-space:pre-wrap;word-wrap:break-word}
 .dtag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;color:#fff;white-space:nowrap}
 .ph{height:44px;border:2px dashed var(--acc);border-radius:12px;opacity:.55;flex:none}
 .menu{position:fixed;z-index:80;background:var(--card);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.18);padding:6px;min-width:220px;max-height:70vh;overflow-y:auto;border:1px solid var(--line)}
@@ -297,7 +326,7 @@ const PRIOS=[{k:'hoch',l:'Hoch',c:'#ff3b30'},{k:'mittel',l:'Mittel',c:'#ff9500'}
 const AMPEL={'grün':'#34c759','gelb':'#ffcc00','rot':'#ff3b30'};
 const PCOLORS=['#0071e3','#34c759','#ff9500','#af52de','#ff2d55','#5ac8fa','#a2845e','#5856d6'];
 const AVC=['#0071e3','#34c759','#ff9500','#af52de','#ff2d55','#30b0c7','#a2845e','#5856d6','#ff3b30','#64d2ff'];
-const TABS=[['overview','Übersicht'],['tasks','Aufgaben'],['hb','Projekthandbuch'],['gantt','Terminplan'],['team','Team & Rollen'],['settings','Einstellungen']];
+const TABS=[['overview','Übersicht'],['tasks','Aufgaben'],['forum','Forum'],['hb','Projekthandbuch'],['gantt','Terminplan'],['team','Team & Rollen'],['settings','Einstellungen']];
 
 /* ===== Projekthandbuch-Struktur (angelehnt an pma-Standard) ===== */
 const SECTIONS=[
@@ -353,13 +382,13 @@ const LOGIN_DOMAIN='login.projektcockpit.app';  // interne Login-Adressen, es we
 const toEmail=u=>normU(u)+'@'+LOGIN_DOMAIN;
 
 /* ===== State ===== */
-const S={mode:'local',projects:{},tasks:{},accounts:{},account:null,view:'home',pid:null,tab:'overview',hbSec:'auftrag',board:'status',filter:{q:'',m:'',p:''},preview:null,loading:true,canWrite:true,uid:null,isOwner:true,myName:'',profiles:{},user:null,db:null,netNote:'',dirty:false,qa:null};
+const S={mode:'local',projects:{},tasks:{},accounts:{},messages:{},posts:{},thread:null,inboxTab:'chats',forumCat:'',drafts:{},account:null,view:'home',pid:null,tab:'overview',hbSec:'auftrag',board:'status',filter:{q:'',m:'',p:''},preview:null,loading:true,canWrite:true,uid:null,isOwner:true,myName:'',profiles:{},user:null,db:null,netNote:'',dirty:false,qa:null};
 const P=()=>S.projects[S.pid];
 
 /* ===== Speicherung (geteilte Datenbank oder lokal) ===== */
 const LK='lk_projektcockpit_v1';
-function loadLocal(){try{const d=JSON.parse(localStorage.getItem(LK)||'{}');S.projects=d.projects||{};S.tasks=d.tasks||{};S.accounts=d.accounts||{};S.myName=d.myName||'';}catch(e){}}
-let lt;function saveLocal(){clearTimeout(lt);lt=setTimeout(()=>{try{localStorage.setItem(LK,JSON.stringify({projects:S.projects,tasks:S.tasks,accounts:S.accounts,myName:S.myName}))}catch(e){}},250);}
+function loadLocal(){try{const d=JSON.parse(localStorage.getItem(LK)||'{}');S.projects=d.projects||{};S.tasks=d.tasks||{};S.accounts=d.accounts||{};S.messages=d.messages||{};S.posts=d.posts||{};S.myName=d.myName||'';}catch(e){}}
+let lt;function saveLocal(){clearTimeout(lt);lt=setTimeout(()=>{try{localStorage.setItem(LK,JSON.stringify({projects:S.projects,tasks:S.tasks,accounts:S.accounts,messages:S.messages,posts:S.posts,myName:S.myName}))}catch(e){}},250);}
 /* ----- Login & Sitzung ----- */
 const SK=LK+'_session';
 const ownerAcc=()=>({id:'__owner',name:(S.myName||'Cockpit-Eigentümer'),username:'eigentümer',isAdmin:true,virtual:true});
@@ -422,9 +451,9 @@ function savePatch(p,patch){deepMerge(p,clone(patch));Store.patch('projects/'+p.
 function updTask(t,patch){deepMerge(t,clone(patch));Store.patch('tasks/'+t.id,patch);}
 
 /* ===== Supabase-Anbindung ===== */
-const SB_TABLE={projects:'projects',tasks:'tasks',accounts:'profiles'};
+const SB_TABLE={projects:'projects',tasks:'tasks',accounts:'profiles',messages:'messages',posts:'project_posts'};
 function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
-const rowTo={projects:r=>Object.assign({},r.data||{},{id:r.id,createdBy:r.created_by}),tasks:r=>Object.assign({},r.data||{},{id:r.id,pid:r.project_id}),accounts:r=>({id:r.id,name:r.name||r.username,username:r.username,email:r.email||'',isAdmin:!!r.is_admin,canCreate:!!r.can_create,active:r.active!==false})};
+const rowTo={messages:r=>({id:r.id,from:r.sender,to:r.recipient,body:r.body,ts:r.created_at,read:r.read_at||''}),posts:r=>({id:r.id,pid:r.project_id,author:r.author||'',parent:r.parent_id||'',cat:r.category,title:r.title||'',body:r.body,pinned:!!r.pinned,ts:r.created_at}),projects:r=>Object.assign({},r.data||{},{id:r.id,createdBy:r.created_by}),tasks:r=>Object.assign({},r.data||{},{id:r.id,pid:r.project_id}),accounts:r=>({id:r.id,name:r.name||r.username,username:r.username,email:r.email||'',isAdmin:!!r.is_admin,canCreate:!!r.can_create,active:r.active!==false})};
 function supaErr(e){const m=String((e&&(e.message||e.error_description))||e||'Fehler');
  if(/saving new user|nicht erlaubt/i.test(m))return 'Registrierung ist nicht erlaubt.';
  if(/already registered|already exists|duplicate key/i.test(m))return 'Dieser Benutzername ist bereits vergeben.';
@@ -434,6 +463,13 @@ function supaErr(e){const m=String((e&&(e.message||e.error_description))||e||'Fe
  return m;}
 async function supaRun(path,job){
  const [c,id]=path.split('/');const tb=S.sb.from(SB_TABLE[c]);let r;
+ if(c==='messages'||c==='posts'){const o=S[c][id];
+  if(job.mode==='delete')r=await tb.delete().eq('id',id);
+  else if(!o)return;
+  else if(job.mode==='set')r=await tb.insert(c==='messages'?{id,sender:o.from,recipient:o.to,body:o.body,created_at:o.ts}:{id,project_id:o.pid,author:o.author,parent_id:o.parent||null,category:o.cat,title:o.title||'',body:o.body,pinned:!!o.pinned,created_at:o.ts});
+  else if(c==='messages')r=await S.sb.rpc('cockpit_mark_read',{ids:[id]});
+  else{r=await tb.update({pinned:!!o.pinned,title:o.title||'',body:o.body}).eq('id',id).select('id');if(!r.error&&Array.isArray(r.data)&&!r.data.length)throw {message:'Keine Berechtigung'};}
+  if(r&&r.error)throw r.error;return;}
  if(job.mode==='delete'){
   if(c==='accounts')r=await S.sb.rpc('cockpit_admin_delete_user',{target:id});
   else r=await tb.delete().eq('id',id);
@@ -451,9 +487,10 @@ async function supaRun(path,job){
 }
 function mergeColl(c,rows){const map={};(rows||[]).forEach(r=>{const o=rowTo[c](r);const p=c+'/'+o.id;map[o.id]=Store.busy(p)&&S[c][o.id]?S[c][o.id]:o;});for(const id in S[c]){const p=c+'/'+id;if(!map[id]&&Store.busy(p)&&!(Store.pending[p]&&Store.pending[p].mode==='delete'))map[id]=S[c][id];}S[c]=map;}
 async function supaLoadAll(){
- const sb=S.sb;const [a,p,t]=await Promise.all([sb.from('profiles').select('*'),sb.from('projects').select('id,data,created_by'),sb.from('tasks').select('id,project_id,data')]);
+ const sb=S.sb;const [a,p,t,m,f]=await Promise.all([sb.from('profiles').select('*'),sb.from('projects').select('id,data,created_by'),sb.from('tasks').select('id,project_id,data'),sb.from('messages').select('*').order('created_at',{ascending:false}).limit(1000),sb.from('project_posts').select('*').order('created_at',{ascending:false}).limit(1000)]);
  const e=a.error||p.error||t.error;if(e)throw e;
  mergeColl('accounts',a.data);mergeColl('projects',p.data);mergeColl('tasks',t.data);
+ if(!m.error)mergeColl('messages',m.data);if(!f.error)mergeColl('posts',f.data);
 }
 let supaPoll=null,supaChan=null;
 async function supaReload(){if(!S.account)return;try{await supaLoadAll();syncAccount();}catch(e){}scheduleRender();}
@@ -474,11 +511,11 @@ async function supaAfterLogin(uid){
  render();supaLive();return true;
 }
 function supaLive(){
- if(!supaChan){try{supaChan=S.sb.channel('cockpit-live');['projects','tasks','profiles'].forEach(tb=>supaChan.on('postgres_changes',{event:'*',schema:'public',table:tb},pl=>onRt(tb==='profiles'?'accounts':tb,pl)));supaChan.subscribe();}catch(e){}}
+ if(!supaChan){try{supaChan=S.sb.channel('cockpit-live');['projects','tasks','profiles','messages','project_posts'].forEach(tb=>supaChan.on('postgres_changes',{event:'*',schema:'public',table:tb},pl=>onRt(tb==='profiles'?'accounts':tb==='project_posts'?'posts':tb,pl)));supaChan.subscribe();}catch(e){}}
  if(!supaPoll)supaPoll=setInterval(()=>{if(S.account&&!document.hidden)supaReload();},45000);
 }
-function onRt(c,pl){const row=pl.new&&pl.new.id?pl.new:null;const id=row?row.id:(pl.old&&pl.old.id);if(!id||!S.account)return;if(Store.busy(c+'/'+id))return;if(pl.eventType==='DELETE')delete S[c][id];else S[c][id]=rowTo[c](row);if(c==='accounts')syncAccount();scheduleRender();}
-async function supaLogout(){try{await S.sb.auth.signOut();}catch(e){}if(supaChan){try{S.sb.removeChannel(supaChan);}catch(e){}supaChan=null;}clearInterval(supaPoll);supaPoll=null;S.account=null;S.accounts={};S.projects={};S.tasks={};await supaCheckSetup();}
+function onRt(c,pl){const row=pl.new&&pl.new.id?pl.new:null;const id=row?row.id:(pl.old&&pl.old.id);if(!id||!S.account)return;if(Store.busy(c+'/'+id))return;const isNew=pl.eventType==='INSERT'&&!S[c][id];if(pl.eventType==='DELETE')delete S[c][id];else S[c][id]=rowTo[c](row);if(c==='accounts')syncAccount();if(c==='messages'&&isNew)newMsgAlert(S[c][id]);scheduleRender();}
+async function supaLogout(){try{await S.sb.auth.signOut();}catch(e){}if(supaChan){try{S.sb.removeChannel(supaChan);}catch(e){}supaChan=null;}clearInterval(supaPoll);supaPoll=null;S.account=null;S.accounts={};S.projects={};S.tasks={};S.messages={};S.posts={};S.thread=null;await supaCheckSetup();}
 
 async function init(){
  render();
@@ -504,6 +541,8 @@ function subscribe(){
  const err=()=>{clearTimeout(timer);S.loading=false;S.netNote='Verbindung zur Datenbank unterbrochen. Bitte Seite später neu öffnen.';render();};
  S.db.collection('projects').onSnapshot(snap=>{applySnap('projects',snap);if(!snap.metadata.fromCache)gp=true;done();scheduleRender();resolveProfiles();},err);
  S.db.collection('tasks').onSnapshot(snap=>{applySnap('tasks',snap);if(!snap.metadata.fromCache)gt=true;done();scheduleRender();},err);
+ S.db.collection('messages').onSnapshot(snap=>{const before=new Set(Object.keys(S.messages));applySnap('messages',snap);if(!S.loading)Object.values(S.messages).forEach(m=>{if(!before.has(m.id))newMsgAlert(m);});scheduleRender();},()=>{});
+ S.db.collection('posts').onSnapshot(snap=>{applySnap('posts',snap);scheduleRender();},()=>{});
 }
 function applySnap(coll,snap){
  const map={};
@@ -573,6 +612,62 @@ function dueNotify(){
  const k=dueKey()+'_n';try{if(localStorage.getItem(k))return;localStorage.setItem(k,'1');}catch(e){}
  try{new Notification('Projekt-Cockpit: '+list.length+' Aufgabe'+(list.length>1?'n':'')+' fällig',{body:list.slice(0,4).map(x=>'• '+x.t.title+' ('+dueLabel(x.d)+')').join('\n')});}catch(e){}
 }
+/* ===== Postfach & Forum ===== */
+const CATS=[{k:'ankuendigung',l:'📢 Ankündigung',c:'#ff9500'},{k:'diskussion',l:'💬 Diskussion',c:'#0071e3'},{k:'frage',l:'❓ Frage',c:'#af52de'},{k:'info',l:'ℹ️ Info',c:'#34c759'}];
+const catOf=k=>CATS.find(c=>c.k===k)||CATS[1];
+const accName=id=>(S.accounts[id]&&S.accounts[id].name)||(S.account&&S.account.id===id?S.account.name:'Unbekannt');
+function accAv(id,cls='sm'){return `<span class="av ${cls}" style="background:${avColor(id)}">${esc(initials(accName(id)))}</span>`;}
+function fmtTs(ts){if(!ts)return '';const d=new Date(ts),n=new Date();const same=d.toDateString()===n.toDateString();const y=new Date(n);y.setDate(n.getDate()-1);
+ const hm=d.toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit'});return same?hm:d.toDateString()===y.toDateString()?'gestern '+hm:d.toLocaleDateString('de-AT',{day:'2-digit',month:'2-digit',year:'2-digit'})+' '+hm;}
+function unreadCount(){if(!S.account)return 0;const me=S.account.id;return Object.values(S.messages).filter(m=>m.to===me&&!m.read).length;}
+function sharedMap(){const out={};const a=S.account;if(!a)return out;
+ Object.values(S.projects).map(ensure).forEach(p=>{const mine=p.createdBy===a.id||p.members.some(m=>m.accountId===a.id);if(!mine)return;
+  p.members.forEach(m=>{if(m.accountId&&m.accountId!==a.id&&S.accounts[m.accountId])(out[m.accountId]=out[m.accountId]||[]).push({p,role:roleName(p,m.roleId)});});});return out;}
+function conversations(){const me=S.account.id;const by={};Object.values(S.messages).forEach(m=>{if(m.from!==me&&m.to!==me)return;const o=m.from===me?m.to:m.from;(by[o]=by[o]||[]).push(m);});
+ return Object.entries(by).map(([id,ms])=>{ms.sort((a,b)=>String(a.ts).localeCompare(String(b.ts)));return {id,ms,last:ms[ms.length-1],unread:ms.filter(x=>x.to===me&&!x.read).length};}).sort((a,b)=>String(b.last.ts).localeCompare(String(a.last.ts)));}
+function newMsgAlert(m){if(!S.account||!m||m.to!==S.account.id||m.read)return;if(S.view==='inbox'&&S.thread===m.from&&!document.hidden)return;
+ toast('✉️ Neue Nachricht von '+accName(m.from));
+ try{if(typeof Notification!=='undefined'&&Notification.permission==='granted'&&document.hidden)new Notification('Nachricht von '+accName(m.from),{body:String(m.body).slice(0,140)});}catch(e){}}
+function markThreadRead(){if(S.view!=='inbox'||!S.thread||!S.account)return;const me=S.account.id;const now=new Date().toISOString();
+ Object.values(S.messages).forEach(m=>{if(m.to===me&&m.from===S.thread&&!m.read){m.read=now;Store.patch('messages/'+m.id,{read:now});}});}
+function forumSeenKey(pid){return LK+'_forum_'+(S.account?S.account.id:'')+'_'+pid;}
+function forumUnread(p){if(!S.account)return 0;let seen='';try{seen=localStorage.getItem(forumSeenKey(p.id))||'';}catch(e){}
+ return Object.values(S.posts).filter(x=>x.pid===p.id&&x.author!==S.account.id&&String(x.ts)>seen).length;}
+function markForumSeen(p){try{localStorage.setItem(forumSeenKey(p.id),new Date().toISOString());}catch(e){}}
+function inboxView(){
+ const me=S.account.id;const sm=sharedMap();const convs=conversations();
+ let left=`<div class="ilist"><div class="row" style="margin-bottom:8px"><div class="seg" style="flex:1">${[['chats','Nachrichten'],['contacts','Kontakte']].map(([k,l])=>`<button style="flex:1" class="${S.inboxTab===k?'on':''}" data-act="inboxTab" data-id="${k}">${l}</button>`).join('')}</div></div>`;
+ if(S.inboxTab==='chats'){
+  left+=convs.length?convs.map(c=>`<div class="ci ${S.thread===c.id?'on':''}" data-act="openThread" data-id="${esc(c.id)}">${accAv(c.id,'')}<div class="t"><b>${esc(accName(c.id))}</b><span>${c.last.from===me?'Du: ':''}${esc(String(c.last.body).slice(0,60))}</span></div><div style="text-align:right"><div class="sm mut">${esc(fmtTs(c.last.ts))}</div>${c.unread?`<span class="ub">${c.unread}</span>`:''}</div></div>`).join(''):`<p class="sm mut" style="padding:8px">Noch keine Nachrichten. Unter „Kontakte“ findest du alle Personen, mit denen du Projekte teilst.</p>`;
+ }else{
+  const ids=Object.keys(sm).sort((a,b)=>accName(a).localeCompare(accName(b)));
+  left+=`<div class="sm mut" style="padding:4px 8px 8px">Personen, mit denen du Projekte teilst:</div>`;
+  left+=ids.length?ids.map(id=>`<div class="ci ${S.thread===id?'on':''}" data-act="openThread" data-id="${esc(id)}">${accAv(id,'')}<div class="t"><b>${esc(accName(id))}</b><div class="pchips">${sm[id].map(x=>`<span class="pchip" title="${esc(x.role)}">${esc(x.p.name)} · ${esc(x.role)}</span>`).join('')}</div></div><span title="Nachricht schreiben">✉️</span></div>`).join(''):'<p class="sm mut" style="padding:8px">Du teilst noch mit niemandem ein Projekt.</p>';
+  if(isAdmin()){const others=Object.values(S.accounts).filter(a=>a.id!==me&&!sm[a.id]).sort((a,b)=>a.name.localeCompare(b.name));
+   if(others.length)left+=`<div class="sm mut" style="padding:12px 8px 6px">Weitere Benutzer (nur für Admins sichtbar):</div>`+others.map(a=>`<div class="ci ${S.thread===a.id?'on':''}" data-act="openThread" data-id="${esc(a.id)}">${accAv(a.id,'')}<div class="t"><b>${esc(a.name)}</b><span>keine gemeinsamen Projekte</span></div><span>✉️</span></div>`).join('');}
+ }
+ left+='</div>';
+ let right;
+ if(S.thread){
+  const ms=Object.values(S.messages).filter(m=>(m.from===me&&m.to===S.thread)||(m.to===me&&m.from===S.thread)).sort((a,b)=>String(a.ts).localeCompare(String(b.ts)));
+  let lastDay='';const bubbles=ms.map(m=>{const day=new Date(m.ts).toLocaleDateString('de-AT',{weekday:'short',day:'2-digit',month:'long'});const sep=day!==lastDay?`<div class="dsep">${esc(day)}</div>`:'';lastDay=day;return sep+`<div class="bub ${m.from===me?'me':''}">${esc(m.body)}<span class="tm2">${esc(new Date(m.ts).toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit'}))}${m.from===me&&m.read?' · gelesen':''}</span></div>`;}).join('');
+  const sp=sm[S.thread]||[];
+  right=`<div class="tpane"><div class="thead">${accAv(S.thread,'')}<div style="flex:1"><b>${esc(accName(S.thread))}</b><div class="pchips">${sp.map(x=>`<span class="pchip">${esc(x.p.name)}</span>`).join('')||'<span class="sm mut">keine gemeinsamen Projekte</span>'}</div></div></div><div class="thread" id="thread">${bubbles||'<p class="sm mut" style="margin:auto">Schreib die erste Nachricht 👋</p>'}</div>${S.canWrite?`<div class="tcomp"><textarea id="msgIn" rows="2" placeholder="Nachricht schreiben … (Enter = senden, Shift+Enter = neue Zeile)" data-draft="${esc(S.thread)}">${esc(S.drafts[S.thread]||'')}</textarea><button class="pri" data-act="sendMsg">Senden</button></div>`:''}</div>`;
+ }else right=`<div class="tpane" style="align-items:center;justify-content:center"><div style="text-align:center" class="mut"><div style="font-size:40px">✉️</div><p>Wähle links eine Unterhaltung oder einen Kontakt.</p></div></div>`;
+ return `<main class="wrap"><div class="hero" style="margin-bottom:14px"><div><h1>✉️ Postfach</h1><p class="mut">Direktnachrichten an Personen aus deinen Projekten.</p></div><div class="row"><button data-act="home">← Projekte</button></div></div><div class="inbox">${left}${right}</div></main>`;
+}
+function forumView(p){
+ const all=Object.values(S.posts).filter(x=>x.pid===p.id);const cp=can(p,'kommentieren'),mod=can(p,'projekt_bearbeiten');
+ const tops=all.filter(x=>!x.parent&&(!S.forumCat||x.cat===S.forumCat)).sort((a,b)=>(b.pinned-a.pinned)||String(b.ts).localeCompare(String(a.ts)));
+ const meId=S.account&&S.account.id;
+ let h=`<div class="toolbar"><div class="seg"><button class="${!S.forumCat?'on':''}" data-act="forumCat" data-id="">Alle</button>${CATS.map(c=>`<button class="${S.forumCat===c.k?'on':''}" data-act="forumCat" data-id="${c.k}">${c.l}</button>`).join('')}</div></div>`;
+ if(cp)h+=`<div class="post"><h3 style="margin-bottom:10px">Neuer Beitrag</h3><div class="row" style="gap:10px;flex-wrap:nowrap;margin-bottom:8px"><select id="fpCat" style="width:180px">${CATS.filter(c=>c.k!=='ankuendigung'||mod).map(c=>`<option value="${c.k}" ${c.k===(S.forumCat||'diskussion')?'selected':''}>${c.l}</option>`).join('')}</select><input id="fpTitle" placeholder="Titel"></div><textarea id="fpBody" rows="3" placeholder="Was möchtest du dem Projektteam mitteilen?"></textarea><div class="row" style="justify-content:flex-end;margin-top:8px"><button class="pri" data-act="newPost">Veröffentlichen</button></div></div>`;
+ if(!tops.length)h+=`<div class="empty"><div class="ei">💬</div><h3>Noch keine Beiträge</h3><p class="mut">Ankündigungen, Diskussionen und Fragen für das ganze Projektteam landen hier.</p></div>`;
+ h+=tops.map(x=>{const c=catOf(x.cat);const reps=all.filter(r=>r.parent===x.id).sort((a,b)=>String(a.ts).localeCompare(String(b.ts)));const own=x.author===meId;
+  return `<div class="post ${x.pinned?'pin':''}"><div class="ph2"><span class="cat" style="background:${c.c}">${c.l}</span>${x.pinned?'<span class="sm">📌 angeheftet</span>':''}<span class="sp"></span>${mod?`<button class="ghost sm" data-act="pinPost" data-id="${esc(x.id)}">${x.pinned?'Lösen':'📌 Anheften'}</button>`:''}${own||mod?`<button class="ghost sm danger" data-act="delPost" data-id="${esc(x.id)}">Löschen</button>`:''}</div>${x.title?`<h3>${esc(x.title)}</h3>`:''}<div class="row sm mut" style="margin:6px 0">${accAv(x.author)}<span><b style="color:var(--ink)">${esc(accName(x.author))}</b> · ${esc(fmtTs(x.ts))}</span>${x.author&&x.author!==meId?`<a href="#" data-act="msgTo" data-id="${esc(x.author)}">✉️ privat schreiben</a>`:''}</div><div class="pbody">${esc(x.body)}</div>
+  <div class="replies">${reps.map(r=>`<div class="reply">${accAv(r.author)}<div class="rb"><b class="sm">${esc(accName(r.author))}</b> <span class="sm mut">${esc(fmtTs(r.ts))}</span>${r.author===meId||mod?` <a href="#" class="sm danger" data-act="delPost" data-id="${esc(r.id)}">löschen</a>`:''}<div>${esc(r.body)}</div></div></div>`).join('')}${cp?`<div class="row" style="flex-wrap:nowrap"><input placeholder="Antworten …" data-reply="${esc(x.id)}" data-enter="replyPost"><button data-act="replyPost" data-id="${esc(x.id)}">Antworten</button></div>`:''}</div></div>`;}).join('');
+ return h;
+}
 function checkDue(){if(!S.account||S.loading)return;dueNotify();if(!dueSeen()&&myDueTasks().length&&!$('#overlay .ov'))setTimeout(()=>{if(!$('#overlay .ov')&&S.account)dueModal();},400);}
 const tasksOf=p=>Object.values(S.tasks).filter(t=>t.pid===p.id);
 const scoreColor=s=>s>=15?'#ff3b30':s>=8?'#ff9500':s>0?'#34c759':'#c7c7cc';
@@ -590,13 +685,14 @@ function render(){
  if(S.view==='users'&&!isAdmin())S.view='home';
  const p=S.view==='project'&&P()?ensure(P()):null;
  if(!p&&S.view==='project'){S.view='home';}
- app.innerHTML=topbar()+banners()+(S.view==='users'?usersView():p?projectView(p):homeView())+credit;
- afterRender();checkDue();
+ app.innerHTML=topbar()+banners()+(S.view==='users'?usersView():S.view==='inbox'?inboxView():p?projectView(p):homeView())+credit;
+ afterRender();checkDue();markThreadRead();if(p&&S.tab==='forum')markForumSeen(p);
 }
 function scheduleRender(){const a=document.activeElement;if(a&&a.closest&&a.closest('#app')&&/INPUT|TEXTAREA|SELECT/.test(a.tagName)){S.dirty=true;return;}render();}
 function afterRender(){
  document.querySelectorAll('#app textarea').forEach(autoGrow);
  const q=document.querySelector('.qa');if(q)q.focus();
+ const th=document.getElementById('thread');if(th)th.scrollTop=th.scrollHeight;
 }
 function autoGrow(el){if(!el.closest('.tbl'))return;el.style.height='auto';el.style.height=Math.min(el.scrollHeight+2,420)+'px';}
 function focusFirst(){setTimeout(()=>{const i=document.querySelector('#app .login input');if(i&&!document.activeElement.closest('#app'))i.focus();},30);}
@@ -625,7 +721,7 @@ function topbar(){
  if(p&&isSuper(p)&&(p.members||[]).length){
   prev=`<select class="prevsel" data-chg="preview" title="Rechte-Vorschau: so sieht eine Person das Projekt"><option value="">👁 Ansicht als: Admin</option>${p.members.map(m=>`<option value="${m.id}" ${inPreview(p)&&S.preview.mid===m.id?'selected':''}>👁 ${esc(mName(p,m))} – ${esc(roleName(p,m.roleId))}</option>`).join('')}</select>`;
  }
- return `<header class="top"><div class="brand" data-act="home"><span class="logo">◆</span><b>Projekt-Cockpit</b></div>${p?`<span class="crumb">/</span><span class="crumbp"><i class="dot" style="background:${esc(p.color)}"></i>${esc(p.name)}</span>`:''}<div class="sp"></div>${prev}<span class="modebadge ${S.mode==='local'?'loc':''}" title="${S.mode==='local'?'Daten werden nur in diesem Browser gespeichert':'Alle Daten liegen in einer gemeinsamen Online-Datenbank'}">${S.mode==='db'?'● Live · geteilt':S.mode==='supa'?'● Online · Mehrbenutzer':'● Lokal gespeichert'}</span>${uc}<button class="help" data-act="help" title="Hilfe – alles erklärt">?</button></header>`;
+ return `<header class="top"><div class="brand" data-act="home"><span class="logo">◆</span><b>Projekt-Cockpit</b></div>${p?`<span class="crumb">/</span><span class="crumbp"><i class="dot" style="background:${esc(p.color)}"></i>${esc(p.name)}</span>`:''}<div class="sp"></div>${prev}<span class="modebadge ${S.mode==='local'?'loc':''}" title="${S.mode==='local'?'Daten werden nur in diesem Browser gespeichert':'Alle Daten liegen in einer gemeinsamen Online-Datenbank'}">${S.mode==='db'?'● Live · geteilt':S.mode==='supa'?'● Online · Mehrbenutzer':'● Lokal gespeichert'}</span>${S.account?(()=>{const u=unreadCount();return `<button class="mailbtn" data-act="inbox" title="Postfach">✉️${u?`<span class="badge">${u}</span>`:''}</button>`})():''}${uc}<button class="help" data-act="help" title="Hilfe – alles erklärt">?</button></header>`;
 }
 function banners(){
  let b='';
@@ -641,7 +737,7 @@ function banners(){
 function homeView(){
  const ps=Object.values(S.projects).map(ensure).filter(visible).sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
  const w=canCreateProjects();
- let h=`<main class="wrap"><div class="hero"><div><h1>Hallo ${esc(firstName(S.account.name))} 👋</h1><p class="mut">${isAdmin()?'Als Admin siehst du alle Projekte und verwaltest Benutzer, Rollen und Rechte.':'Hier siehst du alle Projekte, denen du zugeteilt bist.'}</p></div><div class="row">${isAdmin()?`<button data-act="users">👤 Benutzerverwaltung</button>`:''}${w?`<button data-act="import">⤓ Importieren</button><button data-act="demo">✨ Beispielprojekt</button><button class="pri" data-act="newProject">+ Neues Projekt</button>`:''}</div></div>`;
+ let h=`<main class="wrap"><div class="hero"><div><h1>Hallo ${esc(firstName(S.account.name))} 👋</h1><p class="mut">${isAdmin()?'Als Admin siehst du alle Projekte und verwaltest Benutzer, Rollen und Rechte.':'Hier siehst du alle Projekte, denen du zugeteilt bist.'}</p></div><div class="row"><button data-act="inbox">✉️ Postfach${unreadCount()?` (${unreadCount()})`:''}</button>${isAdmin()?`<button data-act="users">👤 Benutzerverwaltung</button>`:''}${w?`<button data-act="import">⤓ Importieren</button><button data-act="demo">✨ Beispielprojekt</button><button class="pri" data-act="newProject">+ Neues Projekt</button>`:''}</div></div>`;
  if(!ps.length)h+=`<div class="empty"><div class="ei">🗂️</div><h3>${w?'Noch keine Projekte':'Du bist noch keinem Projekt zugeteilt'}</h3><p class="mut">${w?'Lege dein erstes Projekt an – oder schau dir zuerst das Beispielprojekt an.':'Sobald dich jemand einem Projekt zuteilt, erscheint es hier.'}</p>${w?`<div class="row c"><button data-act="demo">✨ Beispielprojekt anlegen</button><button class="pri" data-act="newProject">+ Neues Projekt</button></div>`:''}</div>`;
  else h+=`<div class="pgrid">${ps.map(projectCard).join('')}</div>`;
  if(ps.length){
@@ -667,8 +763,8 @@ function projectView(p){
  if(!isSuper(p)&&!me(p))return `<main class="wrap"><div class="card join"><h2>🔒 Kein Zugriff</h2><p class="mut">Du bist diesem Projekt nicht zugeteilt.</p><button data-act="home">← Zurück zu deinen Projekten</button></div></main>`;
  const m=me(p);
  let h=`<main class="wrap"><div class="phead"><div><div class="row"><i class="bigdot" style="background:${esc(p.color)}"></i><h1>${esc(p.name)}</h1>${statusPill(p.status)}</div>${p.desc?`<p class="mut">${esc(p.desc)}</p>`:''}</div><div class="sm mut right">${m?`Du: <b>${esc(mName(p,m))}</b> · ${esc(roleName(p,m.roleId))}`:''}${isSuper(p)&&!inPreview(p)?` <span class="pill adm">Admin</span>`:''}</div></div>`;
- h+=`<nav class="tabs">${TABS.map(([k,l])=>`<button class="${S.tab===k?'on':''}" data-act="tab" data-id="${k}">${l}</button>`).join('')}</nav>`;
- h+=({overview:overviewView,tasks:tasksView,hb:hbView,gantt:ganttView,team:teamView,settings:settingsView}[S.tab]||overviewView)(p);
+ h+=`<nav class="tabs">${TABS.map(([k,l])=>{const fu=k==='forum'&&S.tab!=='forum'?forumUnread(p):0;return `<button class="${S.tab===k?'on':''}" data-act="tab" data-id="${k}">${l}${fu?`<span class="tabbadge">${fu}</span>`:''}</button>`}).join('')}</nav>`;
+ h+=({overview:overviewView,tasks:tasksView,forum:forumView,hb:hbView,gantt:ganttView,team:teamView,settings:settingsView}[S.tab]||overviewView)(p);
  return h+'</main>';
 }
 
@@ -691,6 +787,8 @@ function overviewView(p){
  <div class="kpi"><div class="v" style="color:${risks.filter(r=>r.sc>=15).length?'var(--red)':'inherit'}">${risks.filter(r=>r.sc>=15).length}</div><div class="l">kritische Risiken (Score ≥ 15)</div></div></div>`;
  h+=`<div class="ogrid">`;
  h+=`<div class="card"><h3>🚦 Projektstatus</h3>${st?`<div class="row" style="gap:18px;margin-bottom:8px">${['gesamt','termine','kosten','leistung'].map(x=>`<span class="row" style="gap:6px"><i class="amp" style="background:${AMPEL[st[x]]||'#c7c7cc'}"></i><span class="sm">${x[0].toUpperCase()+x.slice(1)}</span></span>`).join('')}</div><p class="sm mut" style="margin:0">Stand ${fmtD(st.datum)}: ${esc(st.kommentar||'–')}</p>`:`<p class="sm mut">Noch kein Statusbericht. <a href="#" data-act="goHb" data-id="status">Jetzt anlegen →</a></p>`}</div>`;
+ {const ann=Object.values(S.posts).filter(x=>x.pid===p.id&&!x.parent).sort((a,b)=>(b.pinned-a.pinned)||String(b.ts).localeCompare(String(a.ts))).filter(x=>x.cat==='ankuendigung'||x.pinned).slice(0,3);
+ h+=`<div class="card"><h3>📢 Ankündigungen</h3>${ann.length?ann.map(x=>`<div class="li click" data-act="tab" data-id="forum"><span class="sm" style="flex:1"><b>${esc(x.title||String(x.body).slice(0,50))}</b><br><span class="mut">${esc(accName(x.author))} · ${esc(fmtTs(x.ts))}</span></span>${x.pinned?'📌':''}</div>`).join(''):`<p class="sm mut">Keine Ankündigungen. <a href="#" data-act="tab" data-id="forum">Zum Forum →</a></p>`}</div>`;}
  h+=`<div class="card"><h3>◆ Nächste Meilensteine</h3>${nextMs.length?nextMs.map(r=>`<div class="li"><span style="color:${p.color}">◆</span><span style="flex:1">${esc(r.name)}</span><span class="sm ${r.plan<today()?'due late':'mut'}">${fmtD(r.plan)}</span></div>`).join(''):`<p class="sm mut">Keine offenen Meilensteine. <a href="#" data-act="goHb" data-id="meilensteine">Meilensteine planen →</a></p>`}</div>`;
  const load=p.members.map(mm=>({m:mm,n:ts.filter(t=>t.assignee===mm.id&&t.status!=='done').length}));const mx=Math.max(1,...load.map(x=>x.n));
  h+=`<div class="card"><h3>👥 Auslastung im Team</h3>${load.length?load.map(x=>`<div class="li">${av(p,x.m,'sm')}<span style="width:120px" class="sm">${esc(mName(p,x.m))}</span><div class="bar"><div style="width:${x.n/mx*100}%;background:${avColor(x.m.id)}"></div></div><span class="sm mut" style="width:24px;text-align:right">${x.n}</span></div>`).join(''):'<p class="sm mut">Noch kein Team.</p>'}</div>`;
@@ -829,7 +927,7 @@ function teamView(p){
  let h=`<div class="card" style="margin-bottom:16px"><div class="blkh"><h3 style="flex:1">👥 Projektteam (${p.members.length})</h3>${isAdmin()?`<button data-act="newUser" data-id="${esc(p.id)}">+ Neuen Benutzer anlegen</button>`:''}${mm?'<button class="pri" data-act="addMember">+ Person zuteilen</button>':''}</div><div class="tblwrap"><table class="mtbl" style="min-width:780px"><thead><tr><th>Person</th><th>Login</th><th style="width:210px">Rolle im Projekt</th><th>Offene Aufgaben</th><th></th></tr></thead><tbody>`;
  h+=p.members.map(m=>{const open=ts.filter(t=>t.assignee===m.id&&t.status!=='done').length;const isMe=me(p)&&me(p).id===m.id;const a=m.accountId&&S.accounts[m.accountId];
   const login=a?`<span class="pill ${a.active===false?'pausiert':'aktiv'}">${a.active===false?'gesperrt':'🔑 '+esc(a.username)}</span>`:(m.accountId==='__owner'?'<span class="pill aktiv">Eigentümer</span>':(mm&&free.length?`<select data-macc="${esc(m.id)}" style="width:190px"><option value="">⚠️ ohne Login – Konto verknüpfen …</option>${free.map(x=>`<option value="${esc(x.id)}">${esc(x.name)} (${esc(x.username)})</option>`).join('')}</select>`:'<span class="pill">ohne Login</span>'));
-  return `<tr><td><div class="row" style="flex-wrap:nowrap">${av(p,m)}${!a&&mm?`<input data-mf="${esc(m.id)}|name" value="${esc(m.name||'')}" placeholder="Name">`:`<b>${esc(mName(p,m))}</b>`}${isMe?'<span class="pill">Du</span>':''}</div></td><td>${login}</td><td><select data-mrole="${esc(m.id)}" ${mm?'':'disabled'}>${p.roles.map(r=>`<option value="${esc(r.id)}" ${r.id===m.roleId?'selected':''}>${esc(r.name)}</option>`).join('')}</select></td><td><a href="#" data-act="filterMember" data-id="${esc(m.id)}">${open}</a></td><td style="white-space:nowrap">${mm&&!isMe?`<button class="ghost sm danger" data-act="rmMember" data-id="${esc(m.id)}" title="Aus Projekt entfernen">✕</button>`:''}</td></tr>`}).join('');
+  return `<tr><td><div class="row" style="flex-wrap:nowrap">${av(p,m)}${!a&&mm?`<input data-mf="${esc(m.id)}|name" value="${esc(m.name||'')}" placeholder="Name">`:`<b>${esc(mName(p,m))}</b>`}${isMe?'<span class="pill">Du</span>':''}</div></td><td>${login}</td><td><select data-mrole="${esc(m.id)}" ${mm?'':'disabled'}>${p.roles.map(r=>`<option value="${esc(r.id)}" ${r.id===m.roleId?'selected':''}>${esc(r.name)}</option>`).join('')}</select></td><td><a href="#" data-act="filterMember" data-id="${esc(m.id)}">${open}</a></td><td style="white-space:nowrap">${m.accountId&&S.accounts[m.accountId]&&!isMe&&S.account&&m.accountId!==S.account.id?`<button class="ghost sm" data-act="msgTo" data-id="${esc(m.accountId)}" title="Nachricht schreiben">✉️</button>`:''}${mm&&!isMe?`<button class="ghost sm danger" data-act="rmMember" data-id="${esc(m.id)}" title="Aus Projekt entfernen">✕</button>`:''}</td></tr>`}).join('');
  h+=`</tbody></table></div><p class="sm mut" style="margin:12px 0 0">Nur zugeteilte Personen sehen dieses Projekt – mit den Rechten ihrer Rolle. Personen „ohne Login“ sind Platzhalter (z. B. Externe), denen man Aufgaben zuweisen kann.${isAdmin()?' Benutzerkonten & Passwörter verwaltest du in der <a href="#" data-act="users">Benutzerverwaltung</a>.':''}</p></div>`;
  h+=`<div class="card"><div class="blkh"><h3 style="flex:1">🔐 Rollen & Rechte</h3>${rm?'<button data-act="addRole">+ Rolle</button>':''}</div><div class="rolecards">${p.roles.map(r=>{const n=p.members.filter(m=>m.roleId===r.id).length;return `<div class="rolec"><input data-rf="${esc(r.id)}|name" value="${esc(r.name)}" ${rm?'':'disabled'}><textarea rows="2" data-rf="${esc(r.id)}|desc" placeholder="Aufgaben & Verantwortung der Rolle" ${rm?'':'disabled'}>${esc(r.desc||'')}</textarea><div class="row"><span class="sm mut">${n} Person${n===1?'':'en'}</span><span class="sp"></span>${rm?`<button class="ghost sm danger" data-act="rmRole" data-id="${esc(r.id)}">Rolle löschen</button>`:''}</div></div>`}).join('')}</div>`;
  h+=`<div class="tblwrap"><table class="mtbl matrix" style="min-width:${300+p.roles.length*120}px"><thead><tr><th>Recht</th>${p.roles.map(r=>`<th>${esc(r.name)}</th>`).join('')}</tr></thead><tbody>${PERMS.map(([k,l])=>`<tr><td>${esc(l)}</td>${p.roles.map(r=>`<td><input type="checkbox" data-perm="${esc(r.id)}|${k}" ${r.perms&&r.perms[k]?'checked':''} ${rm?'':'disabled'}></td>`).join('')}</tr>`).join('')}</tbody></table></div><p class="sm mut" style="margin:10px 0 0">Admins und wer das Projekt angelegt hat, haben immer alle Rechte. Mit „👁 Ansicht als“ oben rechts prüfst du, was eine Person sieht.</p></div>`;
@@ -1031,6 +1129,8 @@ function helpModal(){
  <li>„＋“ in einer Spalte legt die Aufgabe direkt dort an (Titel + Enter).</li>
  <li><b>📦 Arbeitspakete:</b> Mit „📦 + Arbeitspaket“ (oder in der Aufgabe unter „Arbeitspaket → ＋ Neues Arbeitspaket“) anlegen. In der Ansicht „Nach Arbeitspaket“ ziehst du Aufgaben per Drag & Drop in ein Paket. Arbeitspakete landen automatisch im Projektstrukturplan und im Terminplan.</li>
  <li><b>⚠️ Fälligkeits-Warnung:</b> Ist eine dir zugewiesene Aufgabe heute oder morgen fällig (oder überfällig), siehst du oben eine Warnleiste, die Karte ist orange markiert und beim ersten Öffnen am Tag erscheint ein Hinweisfenster. Optional gibt es Browser-Benachrichtigungen (🔔).</li></ul>
+ <h4>✉️ Postfach</h4><p>Über ✉️ oben rechts öffnest du dein Postfach. Unter „Kontakte“ siehst du alle Personen, mit denen du Projekte teilst – inklusive der Projekte und Rollen – und kannst ihnen direkt schreiben. Auch im Team eines Projekts und im Forum gibt es ✉️ zum privaten Schreiben. Neue Nachrichten zeigt ein roter Zähler. Admins können allen Benutzern schreiben.</p>
+ <h4>💬 Projekt-Forum</h4><p>Jedes Projekt hat ein Forum mit Ankündigungen, Diskussionen, Fragen und Infos. Beiträge können beantwortet werden. Ankündigungen schreiben, Beiträge anheften und fremde Beiträge löschen dürfen nur Personen mit dem Recht „Projekt-Stammdaten bearbeiten“; posten darf, wer „Kommentieren“ darf. Neue Beiträge zeigt ein Zähler am Forum-Tab, Ankündigungen erscheinen auch in der Übersicht.</p>
  <h4>📘 Projekthandbuch</h4><p>Alle Kapitel eines klassischen Projekthandbuchs (angelehnt an pma): Projektauftrag & Ziele, Abgrenzung & Kontext, Stakeholder, Projektorganisation, Projektstrukturplan, Meilensteine, Kosten, Risiken (mit automatischem Score), Kommunikation, Projektmarketing, Spielregeln, Protokolle/To-dos, Statusberichte mit Ampeln, Änderungsmanagement und Projektabschluss inkl. Lessons Learned. Alles wird automatisch gespeichert. ● = Kapitel befüllt. „📋 Als Text kopieren“ exportiert das ganze Handbuch (z. B. für Word).</p>
  <h4>📅 Terminplan</h4><p>Das Gantt-Diagramm entsteht automatisch aus den Arbeitspaketen (Start/Ende) und Meilensteinen. Optional mit Aufgaben-Fälligkeiten.</p>
  <ul><li><b>Person zuteilen:</b> Unter „Team & Rollen“ Benutzer aus der Benutzerverwaltung dem Projekt mit einer Rolle zuteilen – oder Platzhalter ohne Login (z. B. Externe) anlegen.</li>
@@ -1120,6 +1220,21 @@ const ACT={
   else{render();toast(S.apEdit?'Arbeitspaket gespeichert':'Arbeitspaket angelegt');}},
  delAp(){const p=P();const id=S.apEdit;confirmBox('Arbeitspaket löschen? Zugeordnete Aufgaben bleiben erhalten.',()=>{savePatch(p,{hb:{psp:(p.hb.psp||[]).filter(x=>x.id!==id)}});tasksOf(p).filter(t=>t.apId===id).forEach(t=>updTask(t,{apId:''}));render();toast('Arbeitspaket gelöscht');});},
  dueList(){dueModal();},
+ inbox(el,e){if(e)e.preventDefault();S.view='inbox';S.preview=null;closeModal();render();window.scrollTo(0,0);},
+ inboxTab(el){S.inboxTab=el.dataset.id;render();},
+ openThread(el){S.thread=el.dataset.id;render();const i=$('#msgIn');if(i)i.focus();},
+ msgTo(el,e){if(e)e.preventDefault();S.thread=el.dataset.id;S.view='inbox';closeModal();render();const i=$('#msgIn');if(i)i.focus();},
+ sendMsg(){const i=$('#msgIn');if(!i||!S.thread)return;const body=i.value.trim();if(!body)return;if(body.length>5000)return toast('Nachricht ist zu lang');
+  const m={id:'g_'+uid(),from:S.account.id,to:S.thread,body,ts:new Date().toISOString(),read:''};S.messages[m.id]=m;Store.set('messages/'+m.id,m);S.drafts[S.thread]='';render();const n=$('#msgIn');if(n)n.focus();},
+ forumCat(el){S.forumCat=el.dataset.id;render();},
+ newPost(){const p=P();if(!can(p,'kommentieren'))return deny();const body=$('#fpBody').value.trim();if(!body){$('#fpBody').focus();return toast('Bitte einen Text eingeben');}
+  let cat=$('#fpCat').value;if(cat==='ankuendigung'&&!can(p,'projekt_bearbeiten'))cat='diskussion';
+  const x={id:'f_'+uid(),pid:p.id,author:S.account.id,parent:'',cat,title:$('#fpTitle').value.trim(),body,pinned:false,ts:new Date().toISOString()};S.posts[x.id]=x;Store.set('posts/'+x.id,x);render();toast('Beitrag veröffentlicht');},
+ replyPost(el){const id=el.dataset.id||el.dataset.reply;const i=document.querySelector(`[data-reply="${id}"]`);const p=P();if(!i||!can(p,'kommentieren'))return;const body=i.value.trim();if(!body)return;
+  const x={id:'f_'+uid(),pid:p.id,author:S.account.id,parent:id,cat:'diskussion',title:'',body,pinned:false,ts:new Date().toISOString()};S.posts[x.id]=x;Store.set('posts/'+x.id,x);render();const n=document.querySelector(`[data-reply="${id}"]`);if(n)n.focus();},
+ pinPost(el){const p=P();if(!can(p,'projekt_bearbeiten'))return deny();const x=S.posts[el.dataset.id];if(!x)return;x.pinned=!x.pinned;Store.patch('posts/'+x.id,{pinned:x.pinned});render();},
+ delPost(el,e){if(e)e.preventDefault();const p=P();const x=S.posts[el.dataset.id];if(!x)return;if(!(x.author===S.account.id||can(p,'projekt_bearbeiten')))return deny();
+  confirmBox(x.parent?'Antwort löschen?':'Beitrag inklusive aller Antworten löschen?',()=>{Object.values(S.posts).filter(r=>r.parent===x.id).forEach(r=>{delete S.posts[r.id];if(S.mode!=='supa')Store.del('posts/'+r.id);});delete S.posts[x.id];Store.del('posts/'+x.id);render();});},
  async enableNotif(){try{const r=await Notification.requestPermission();if(r==='granted'){toast('Benachrichtigungen aktiviert 🔔');try{localStorage.removeItem(dueKey()+'_n');}catch(e){}dueNotify();}else toast('Benachrichtigungen wurden nicht erlaubt');}catch(e){toast('Dein Browser unterstützt das hier nicht');}closeModal();},
  hbSec(el){S.hbSec=el.dataset.id;render();window.scrollTo(0,0);},
  rowAdd(el){const p=P();if(!can(p,'handbuch_bearbeiten'))return deny();const k=el.dataset.id;const arr=(p.hb[k]||[]).slice();const row={id:'x_'+uid()};
@@ -1140,6 +1255,7 @@ const ACT={
  endPreview(){S.preview=null;render();},
  users(el,e){S.view='users';S.preview=null;closeModal();render();window.scrollTo(0,0);},
  userMenu(el,e){e.stopPropagation();const items=[{sep:S.account.name+' · '+(S.account.virtual?'Notfallzugang':S.account.username)}];
+  items.push({l:'✉️ Postfach'+(unreadCount()?' ('+unreadCount()+' neu)':''),fn:()=>ACT.inbox()});
   if(isAdmin())items.push({l:'👤 Benutzerverwaltung',fn:()=>ACT.users()});
   if(!S.account.virtual)items.push({l:'👤 Mein Konto (Name & Passwort)',fn:()=>myAccountModal()});
   items.push({l:'↩︎ Abmelden',fn:()=>ACT.logout()});openMenu(el,items);},
@@ -1212,7 +1328,7 @@ const ACT={
   else{const n=$('#amName').value.trim();if(!n){$('#amName').focus();return toast('Bitte einen Namen eingeben');}m={id:'m_'+uid(),name:n,email:'',roleId:role,accountId:'',status:'aktiv'};}
   savePatch(p,{members:[...p.members,m]});closeModal();render();toast(mName(p,m)+' zugeteilt');},
  export(){const p=P();copyText(JSON.stringify({format:'lk-projektcockpit',version:1,exportedAt:new Date().toISOString(),project:p,tasks:tasksOf(p)},null,1));},
- delProject(){const p=P();confirmBox(`Projekt „${p.name}“ mit allen Aufgaben endgültig löschen?`,()=>{tasksOf(p).forEach(t=>{delete S.tasks[t.id];Store.del('tasks/'+t.id);});delete S.projects[p.id];Store.del('projects/'+p.id);S.view='home';S.pid=null;remember();render();toast('Projekt gelöscht');});},
+ delProject(){const p=P();confirmBox(`Projekt „${p.name}“ mit allen Aufgaben endgültig löschen?`,()=>{tasksOf(p).forEach(t=>{delete S.tasks[t.id];Store.del('tasks/'+t.id);});Object.values(S.posts).filter(x=>x.pid===p.id).forEach(x=>{delete S.posts[x.id];if(S.mode!=='supa')Store.del('posts/'+x.id);});delete S.projects[p.id];Store.del('projects/'+p.id);S.view='home';S.pid=null;remember();render();toast('Projekt gelöscht');});},
  color(el){const p=P();if(!can(p,'projekt_bearbeiten'))return;savePatch(p,{color:el.dataset.v});render();},
  closeModal(){closeModal();},
  confirmYes(){const f=S.confirmFn;S.confirmFn=null;closeModal();f&&f();},
@@ -1277,6 +1393,7 @@ document.addEventListener('mousedown',e=>{if(S.menu&&!S.menu.contains(e.target)&
 document.addEventListener('keydown',e=>{
  const el=e.target;
  if(e.key==='Escape'){if(S.menu)return closeMenu();if($('#overlay .ov'))return closeModal();if(S.qa){S.qa=null;render();}return;}
+ if(e.key==='Enter'&&el.id==='msgIn'&&!e.shiftKey){e.preventDefault();ACT.sendMsg();return;}
  if(e.key==='Enter'&&el.dataset){
   if(el.dataset.enter){e.preventDefault();ACT[el.dataset.enter]&&ACT[el.dataset.enter](el,e);}
   else if(el.dataset.qa!==undefined){e.preventDefault();const v=el.value.trim();if(!v)return;const p=P();const [k,val]=el.dataset.qa.split(':');const pre={title:v};if(k==='status')pre.status=val;else if(k==='ap')pre.apId=val||'';else{pre.assignee=val||'';}
@@ -1286,6 +1403,7 @@ document.addEventListener('keydown',e=>{
 let srchT;
 function onInput(e){
  const el=e.target,p=P(),ds=el.dataset||{};
+ if(ds.draft!==undefined){S.drafts[ds.draft]=el.value;return;}
  if(ds.flt!==undefined){S.filter[ds.flt]=el.value;const w=$('#boardWrap');if(w&&p)w.innerHTML=boardHtml(p);return;}
  if(ds.f||ds.cell){if(el.tagName==='TEXTAREA')autoGrow(el);applyBinding(el,el.type==='checkbox'?el.checked:el.type==='number'?(el.value===''?'':+el.value):el.value,e.type);return;}
  if(ds.chg==='preview'&&e.type==='change'){S.preview=el.value?{pid:p.id,mid:el.value}:null;render();return;}
