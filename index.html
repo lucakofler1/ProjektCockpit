@@ -510,12 +510,19 @@ async function supaAfterLogin(uid){
  if(S.pid&&(!P()||!visible(ensure(P())))){S.view='home';S.pid=null;}
  render();supaLive();return true;
 }
+async function supaPollMsgs(){if(!S.account||document.hidden||!(S.view==='inbox'||(S.view==='project'&&S.tab==='forum')))return;
+ try{const tb=S.view==='inbox'?'messages':'project_posts';const r=await S.sb.from(tb).select('*').order('created_at',{ascending:false}).limit(200);if(r.error)return;
+  const c=tb==='messages'?'messages':'posts';let ch=false;r.data.forEach(row=>{const o=rowTo[c](row);const old=S[c][o.id];if(Store.busy(c+'/'+o.id))return;
+   if(!old){S[c][o.id]=o;ch=true;if(c==='messages')newMsgAlert(o);}else if(JSON.stringify(old)!==JSON.stringify(o)){S[c][o.id]=o;ch=true;}});
+  if(ch)scheduleRender();}catch(e){}}
+let msgPoll=null;
 function supaLive(){
+ if(!msgPoll)msgPoll=setInterval(supaPollMsgs,5000);
  if(!supaChan){try{supaChan=S.sb.channel('cockpit-live');['projects','tasks','profiles','messages','project_posts'].forEach(tb=>supaChan.on('postgres_changes',{event:'*',schema:'public',table:tb},pl=>onRt(tb==='profiles'?'accounts':tb==='project_posts'?'posts':tb,pl)));supaChan.subscribe();}catch(e){}}
  if(!supaPoll)supaPoll=setInterval(()=>{if(S.account&&!document.hidden)supaReload();},45000);
 }
 function onRt(c,pl){const row=pl.new&&pl.new.id?pl.new:null;const id=row?row.id:(pl.old&&pl.old.id);if(!id||!S.account)return;if(Store.busy(c+'/'+id))return;const isNew=pl.eventType==='INSERT'&&!S[c][id];if(pl.eventType==='DELETE')delete S[c][id];else S[c][id]=rowTo[c](row);if(c==='accounts')syncAccount();if(c==='messages'&&isNew)newMsgAlert(S[c][id]);scheduleRender();}
-async function supaLogout(){try{await S.sb.auth.signOut();}catch(e){}if(supaChan){try{S.sb.removeChannel(supaChan);}catch(e){}supaChan=null;}clearInterval(supaPoll);supaPoll=null;S.account=null;S.accounts={};S.projects={};S.tasks={};S.messages={};S.posts={};S.thread=null;await supaCheckSetup();}
+async function supaLogout(){try{await S.sb.auth.signOut();}catch(e){}if(supaChan){try{S.sb.removeChannel(supaChan);}catch(e){}supaChan=null;}clearInterval(supaPoll);supaPoll=null;clearInterval(msgPoll);msgPoll=null;S.account=null;S.accounts={};S.projects={};S.tasks={};S.messages={};S.posts={};S.thread=null;await supaCheckSetup();}
 
 async function init(){
  render();
@@ -602,15 +609,20 @@ function myDueTasks(){const out=[];if(!S.account)return out;Object.values(S.proj
 function dueKey(){return LK+'_due_'+(S.account?S.account.id:'')+'_'+today();}
 function dueSeen(){try{return localStorage.getItem(dueKey())==='1';}catch(e){return !!S.dueSeenMem;}}
 function markDueSeen(){S.dueSeenMem=true;try{localStorage.setItem(dueKey(),'1');}catch(e){}}
+function msgSummary(){if(!S.account)return {unread:0,unanswered:[],senders:[]};const me=S.account.id;const convs=conversations();
+ const unread=unreadCount();const senders=convs.filter(c=>c.unread).map(c=>c.id);const unanswered=convs.filter(c=>c.last.from!==me);
+ return {unread,senders,unanswered};}
 function dueModal(){
- const list=myDueTasks();if(!list.length)return;markDueSeen();
+ const list=myDueTasks();const ms=msgSummary();if(!list.length&&!ms.unanswered.length)return;markDueSeen();
  const canN=typeof Notification!=='undefined'&&Notification.permission==='default';
- modal(`<div class="mh"><h3>⚠️ Fällige Aufgaben</h3><button class="ghost" data-act="closeModal">✕</button></div><p class="sm mut">Diese Aufgaben sind dir zugewiesen und heute, morgen oder bereits überfällig:</p>${list.map(x=>`<div class="duel" data-act="openTaskFrom" data-pid="${esc(x.p.id)}" data-id="${esc(x.t.id)}"><span class="dtag" style="background:${dueColor(x.d)}">${esc(dueLabel(x.d))}</span><span style="flex:1"><b>${esc(x.t.title)}</b><br><span class="sm mut">${esc(x.p.name)} · fällig ${fmtD(x.t.due)}</span></span><span class="mut">›</span></div>`).join('')}<div class="mf">${canN?'<button data-act="enableNotif" style="margin-right:auto">🔔 Browser-Benachrichtigungen aktivieren</button>':''}<button class="pri" data-act="closeModal">Verstanden</button></div>`);
+ const msgHtml=ms.unanswered.length?`<h3 style="margin:${list.length?'18px':'0'} 0 6px">✉️ Nachrichten</h3><p class="sm mut">${ms.unread?`<b style="color:var(--ink)">${ms.unread} ungelesene Nachricht${ms.unread>1?'en':''}</b> · `:''}${ms.unanswered.length} Unterhaltung${ms.unanswered.length>1?'en warten':' wartet'} auf deine Antwort:</p>${ms.unanswered.slice(0,6).map(c=>`<div class="duel" data-act="msgTo" data-id="${esc(c.id)}">${accAv(c.id,'')}<span style="flex:1"><b>${esc(accName(c.id))}</b>${c.unread?` <span class="ub">${c.unread} neu</span>`:''}<br><span class="sm mut">${esc(String(c.last.body).slice(0,70))} · ${esc(fmtTs(c.last.ts))}</span></span><span class="mut">›</span></div>`).join('')}`:'';
+ modal(`<div class="mh"><h3>🔔 Deine Hinweise</h3><button class="ghost" data-act="closeModal">✕</button></div>${list.length?`<h3 style="margin:0 0 6px">⚠️ Fällige Aufgaben</h3><p class="sm mut">Diese Aufgaben sind dir zugewiesen und heute, morgen oder bereits überfällig:</p>`:''}${list.map(x=>`<div class="duel" data-act="openTaskFrom" data-pid="${esc(x.p.id)}" data-id="${esc(x.t.id)}"><span class="dtag" style="background:${dueColor(x.d)}">${esc(dueLabel(x.d))}</span><span style="flex:1"><b>${esc(x.t.title)}</b><br><span class="sm mut">${esc(x.p.name)} · fällig ${fmtD(x.t.due)}</span></span><span class="mut">›</span></div>`).join('')}${msgHtml}<div class="mf">${canN?'<button data-act="enableNotif" style="margin-right:auto">🔔 Browser-Benachrichtigungen aktivieren</button>':''}<button class="pri" data-act="closeModal">Verstanden</button></div>`);
 }
 function dueNotify(){
- const list=myDueTasks();if(!list.length||typeof Notification==='undefined'||Notification.permission!=='granted')return;
+ const list=myDueTasks();const ms=msgSummary();if((!list.length&&!ms.unread)||typeof Notification==='undefined'||Notification.permission!=='granted')return;
  const k=dueKey()+'_n';try{if(localStorage.getItem(k))return;localStorage.setItem(k,'1');}catch(e){}
- try{new Notification('Projekt-Cockpit: '+list.length+' Aufgabe'+(list.length>1?'n':'')+' fällig',{body:list.slice(0,4).map(x=>'• '+x.t.title+' ('+dueLabel(x.d)+')').join('\n')});}catch(e){}
+ const parts=[];if(list.length)parts.push(list.length+' Aufgabe'+(list.length>1?'n':'')+' fällig');if(ms.unread)parts.push(ms.unread+' ungelesene Nachricht'+(ms.unread>1?'en':''));
+ try{new Notification('Projekt-Cockpit: '+parts.join(' · '),{body:list.slice(0,4).map(x=>'• '+x.t.title+' ('+dueLabel(x.d)+')').concat(ms.senders.slice(0,3).map(id=>'✉️ '+accName(id))).join('\n')});}catch(e){}
 }
 /* ===== Postfach & Forum ===== */
 const CATS=[{k:'ankuendigung',l:'📢 Ankündigung',c:'#ff9500'},{k:'diskussion',l:'💬 Diskussion',c:'#0071e3'},{k:'frage',l:'❓ Frage',c:'#af52de'},{k:'info',l:'ℹ️ Info',c:'#34c759'}];
@@ -668,7 +680,7 @@ function forumView(p){
   <div class="replies">${reps.map(r=>`<div class="reply">${accAv(r.author)}<div class="rb"><b class="sm">${esc(accName(r.author))}</b> <span class="sm mut">${esc(fmtTs(r.ts))}</span>${r.author===meId||mod?` <a href="#" class="sm danger" data-act="delPost" data-id="${esc(r.id)}">löschen</a>`:''}<div>${esc(r.body)}</div></div></div>`).join('')}${cp?`<div class="row" style="flex-wrap:nowrap"><input placeholder="Antworten …" data-reply="${esc(x.id)}" data-enter="replyPost"><button data-act="replyPost" data-id="${esc(x.id)}">Antworten</button></div>`:''}</div></div>`;}).join('');
  return h;
 }
-function checkDue(){if(!S.account||S.loading)return;dueNotify();if(!dueSeen()&&myDueTasks().length&&!$('#overlay .ov'))setTimeout(()=>{if(!$('#overlay .ov')&&S.account)dueModal();},400);}
+function checkDue(){if(!S.account||S.loading)return;dueNotify();if(!dueSeen()&&(myDueTasks().length||msgSummary().unread)&&!$('#overlay .ov')&&S.view!=='inbox')setTimeout(()=>{if(!$('#overlay .ov')&&S.account)dueModal();},400);}
 const tasksOf=p=>Object.values(S.tasks).filter(t=>t.pid===p.id);
 const scoreColor=s=>s>=15?'#ff3b30':s>=8?'#ff9500':s>0?'#34c759':'#c7c7cc';
 function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('on');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('on'),2400);}
@@ -688,7 +700,9 @@ function render(){
  app.innerHTML=topbar()+banners()+(S.view==='users'?usersView():S.view==='inbox'?inboxView():p?projectView(p):homeView())+credit;
  afterRender();checkDue();markThreadRead();if(p&&S.tab==='forum')markForumSeen(p);
 }
-function scheduleRender(){const a=document.activeElement;if(a&&a.closest&&a.closest('#app')&&/INPUT|TEXTAREA|SELECT/.test(a.tagName)){S.dirty=true;return;}render();}
+function scheduleRender(){const a=document.activeElement;
+ if(a&&(a.id==='msgIn'||(a.dataset&&a.dataset.reply!==undefined))){const id=a.id,rp=a.dataset.reply,s=a.selectionStart,e=a.selectionEnd,v=a.value;render();
+  const n=id==='msgIn'?document.getElementById('msgIn'):document.querySelector(`[data-reply="${rp}"]`);if(n){if(n.value!==v)n.value=v;n.focus();try{n.setSelectionRange(s,e);}catch(x){}}return;}if(a&&a.closest&&a.closest('#app')&&/INPUT|TEXTAREA|SELECT/.test(a.tagName)){S.dirty=true;return;}render();}
 function afterRender(){
  document.querySelectorAll('#app textarea').forEach(autoGrow);
  const q=document.querySelector('.qa');if(q)q.focus();
@@ -727,6 +741,7 @@ function banners(){
  let b='';
  if(!S.canWrite)b+=`<div class="banner warn">🔒 Nur-Lesen: Du hast für dieses Cockpit keine Schreibrechte. Bitte den Eigentümer, dich beim Teilen als „Mitwirkende:r“ (Contributor) freizugeben.</div>`;
  if(S.netNote)b+=`<div class="banner">${esc(S.netNote)}</div>`;
+ if(S.account&&S.view!=='inbox'){const ms=msgSummary();if(ms.unread||ms.unanswered.length)b+=`<div class="banner info">✉️ ${ms.unread?`<b>${ms.unread} ungelesene Nachricht${ms.unread>1?'en':''}</b>${ms.senders.length?' von '+ms.senders.slice(0,3).map(id=>esc(accName(id))).join(', ')+(ms.senders.length>3?' …':''):''}`:''}${ms.unread&&ms.unanswered.length?' · ':''}${ms.unanswered.length?`${ms.unanswered.length} Unterhaltung${ms.unanswered.length>1?'en':''} unbeantwortet`:''}<span class="sp"></span><button class="sm" data-act="inbox">Postfach öffnen</button></div>`;}
  if(S.account){const dl=myDueTasks();if(dl.length)b+=`<div class="banner due">⚠️ <b>${dl.length} Aufgabe${dl.length>1?'n':''}</b> ${dl.length>1?'sind':'ist'} bald fällig: ${dl.slice(0,3).map(x=>`<a href="#" data-act="openTaskFrom" data-pid="${esc(x.p.id)}" data-id="${esc(x.t.id)}">${esc(x.t.title)}</a> <span class="sm">(${esc(dueLabel(x.d))})</span>`).join(' · ')}${dl.length>3?' …':''}<span class="sp"></span><button class="sm" data-act="dueList">Alle anzeigen</button></div>`;}
  const p=S.view==='project'?P():null;
  if(p&&inPreview(p)){const m=p.members.find(x=>x.id===S.preview.mid);b+=`<div class="banner info">👁 Vorschau: So sieht <b>${esc(mName(p,m))}</b> (${esc(roleName(p,m&&m.roleId))}) das Projekt – mit genau diesen Rechten.<span class="sp"></span><button class="sm" data-act="endPreview">Vorschau beenden</button></div>`;}
@@ -1128,7 +1143,7 @@ function helpModal(){
  <li>Karte anklicken → Details: Beschreibung, Checkliste, Kommentare, Fälligkeit, Verknüpfung zum Arbeitspaket.</li>
  <li>„＋“ in einer Spalte legt die Aufgabe direkt dort an (Titel + Enter).</li>
  <li><b>📦 Arbeitspakete:</b> Mit „📦 + Arbeitspaket“ (oder in der Aufgabe unter „Arbeitspaket → ＋ Neues Arbeitspaket“) anlegen. In der Ansicht „Nach Arbeitspaket“ ziehst du Aufgaben per Drag & Drop in ein Paket. Arbeitspakete landen automatisch im Projektstrukturplan und im Terminplan.</li>
- <li><b>⚠️ Fälligkeits-Warnung:</b> Ist eine dir zugewiesene Aufgabe heute oder morgen fällig (oder überfällig), siehst du oben eine Warnleiste, die Karte ist orange markiert und beim ersten Öffnen am Tag erscheint ein Hinweisfenster. Optional gibt es Browser-Benachrichtigungen (🔔).</li></ul>
+ <li><b>⚠️ Fälligkeits-Warnung:</b> Ist eine dir zugewiesene Aufgabe heute oder morgen fällig (oder überfällig), siehst du oben eine Warnleiste, die Karte ist orange markiert und beim ersten Öffnen am Tag erscheint das Hinweisfenster „🔔 Deine Hinweise“ – dort steht auch, wie viele Nachrichten ungelesen bzw. unbeantwortet sind. Optional gibt es Browser-Benachrichtigungen (🔔).</li></ul>
  <h4>✉️ Postfach</h4><p>Über ✉️ oben rechts öffnest du dein Postfach. Unter „Kontakte“ siehst du alle Personen, mit denen du Projekte teilst – inklusive der Projekte und Rollen – und kannst ihnen direkt schreiben. Auch im Team eines Projekts und im Forum gibt es ✉️ zum privaten Schreiben. Neue Nachrichten zeigt ein roter Zähler. Admins können allen Benutzern schreiben.</p>
  <h4>💬 Projekt-Forum</h4><p>Jedes Projekt hat ein Forum mit Ankündigungen, Diskussionen, Fragen und Infos. Beiträge können beantwortet werden. Ankündigungen schreiben, Beiträge anheften und fremde Beiträge löschen dürfen nur Personen mit dem Recht „Projekt-Stammdaten bearbeiten“; posten darf, wer „Kommentieren“ darf. Neue Beiträge zeigt ein Zähler am Forum-Tab, Ankündigungen erscheinen auch in der Übersicht.</p>
  <h4>📘 Projekthandbuch</h4><p>Alle Kapitel eines klassischen Projekthandbuchs (angelehnt an pma): Projektauftrag & Ziele, Abgrenzung & Kontext, Stakeholder, Projektorganisation, Projektstrukturplan, Meilensteine, Kosten, Risiken (mit automatischem Score), Kommunikation, Projektmarketing, Spielregeln, Protokolle/To-dos, Statusberichte mit Ampeln, Änderungsmanagement und Projektabschluss inkl. Lessons Learned. Alles wird automatisch gespeichert. ● = Kapitel befüllt. „📋 Als Text kopieren“ exportiert das ganze Handbuch (z. B. für Word).</p>
